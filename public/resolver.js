@@ -192,7 +192,7 @@ function ytWalk(node, out, conts) {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) return node.forEach((n) => ytWalk(n, out, conts));
   const r = node.playlistVideoRenderer || node.videoRenderer || node.gridVideoRenderer || node.reelItemRenderer;
-  if (r?.videoId) out.push(ytVideo(r.videoId, r.title?.runs?.[0]?.text || r.title?.simpleText || r.headline?.simpleText || '', '', r.lengthText?.simpleText || ''));
+  if (r?.videoId) out.push(ytVideo(r.videoId, r.title?.runs?.[0]?.text || r.title?.simpleText || r.headline?.simpleText || '', r.shortBylineText?.runs?.[0]?.text || '', r.lengthText?.simpleText || ''));
   const lv = node.lockupViewModel;
   if (lv?.contentId && /VIDEO/i.test(lv.contentType || 'VIDEO')) out.push(ytVideo(lv.contentId, lv.metadata?.lockupMetadataViewModel?.title?.content || ''));
   const sv = node.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId;
@@ -209,7 +209,9 @@ async function ytBrowse(payload) {
   const out = [], conts = [];
   ytWalk(data, out, conts);
   const seen = new Set();
-  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: conts[conts.length - 1] || null };
+  const title = data.metadata?.playlistMetadataRenderer?.title || data.header?.playlistHeaderRenderer?.title?.simpleText ||
+    data.header?.pageHeaderRenderer?.pageTitle || '';
+  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: conts[conts.length - 1] || null, title };
 }
 async function ytChannelInfo(u) {
   let id = pick(/^\/channel\/(UC[\w-]{22})/, u.pathname);
@@ -241,7 +243,10 @@ async function ytCreator(u, { cursor, ytKey }) {
     if (d.error) throw fail('YT_API', d.error.message);
     const videos = (d.items || []).map((it) => it.snippet)
       .filter((s) => s.resourceId?.videoId && s.title !== 'Private video' && s.title !== 'Deleted video')
-      .map((s) => ytVideo(s.resourceId.videoId, s.title, author || s.channelTitle));
+      .map((s) => ytVideo(s.resourceId.videoId, s.title, s.videoOwnerChannelTitle || author || s.channelTitle));
+    if (listId && !c?.pageToken) {
+      try { author = (await getJson(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${listId}&key=${ytKey}`)).items?.[0]?.snippet?.title || author; } catch {}
+    }
     return { author: author || 'YouTube', total: d.pageInfo?.totalResults, videos, next: d.nextPageToken ? encCursor({ playlistId, author, pageToken: d.nextPageToken }) : null };
   }
 
@@ -249,11 +254,11 @@ async function ytCreator(u, { cursor, ytKey }) {
   if (!transport) throw fail('NEED_HELPER_OR_KEY');
   if (c?.token) {
     const r = await ytBrowse({ continuation: c.token });
-    r.videos.forEach((v) => (v.author = c.author));
-    return { author: c.author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author: c.author }) : null };
+    if (!c.list) r.videos.forEach((v) => (v.author = c.author));
+    return { author: c.author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author: c.author, list: c.list }) : null };
   }
   let author, browseId, channelId;
-  if (listId) { browseId = 'VL' + listId; author = 'Playlist'; }
+  if (listId) { browseId = 'VL' + listId; author = ''; }
   else {
     const info = await ytChannelInfo(u);
     author = info.name;
@@ -262,8 +267,9 @@ async function ytCreator(u, { cursor, ytKey }) {
   }
   let r = await ytBrowse({ browseId });
   if (!r.videos.length && channelId) r = await ytBrowse({ browseId: channelId, params: 'EgZ2aWRlb3PyBgQKAjoA' });
-  r.videos.forEach((v) => (v.author = author));
-  return { author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author }) : null };
+  if (listId) author = r.title || 'Playlist'; // 播放列表：author 字段放列表名，视频各自保留所属频道
+  r.videos.forEach((v) => (v.author = listId ? v.author || '' : author));
+  return { author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author, list: !!listId }) : null };
 }
 
 // ---------------------------------------------------------------- 哔哩哔哩
@@ -312,8 +318,80 @@ async function biliSingle(u) {
   const d = transport ? await getJson(viewUrl, { headers: BILI_REF }) : await jsonp(viewUrl);
   if (d.code !== 0) throw fail('BILI_API', d.message);
   const v = biliVideo(d.data);
-  if (off.page) { v.page = off.page; v.title += ` (P${off.page})`; }
+  // 分P 视频：详情里的 duration 是所有分P的总时长，单独加入某一P时改用这一P自己的时长和标题
+  const pg = (d.data.pages || [])[(off.page || 1) - 1];
+  if (d.data.pages?.length > 1 && pg) {
+    v.duration = fmtDur(pg.duration);
+    if (off.page) { v.page = off.page; v.title = `${d.data.title} · ${pg.part}`; v.url = `https://www.bilibili.com/video/${d.data.bvid}?p=${off.page}`; }
+  } else if (off.page) { v.page = off.page; v.title += ` (P${off.page})`; }
+  v._collection = biliCollectionOf(d.data, v);
   return v;
+}
+// 视频详情里自带合集（ugc_season）和分P（pages）的完整列表
+function biliCollectionOf(dd, v) {
+  const base = { author: v.author, authorUrl: v.authorUrl };
+  const eps = (dd.ugc_season?.sections || []).flatMap((sec) => sec.episodes || []);
+  if (eps.length > 1) {
+    return {
+      ...base, id: 'bili-season-' + dd.ugc_season.id, title: dd.ugc_season.title,
+      videos: eps.map((ep) => biliVideo({ bvid: ep.bvid, title: ep.title || ep.arc?.title, pic: ep.arc?.pic, duration: ep.arc?.duration, owner: dd.owner })),
+    };
+  }
+  if ((dd.pages || []).length > 1) {
+    return {
+      ...base, id: 'bili-pages-' + dd.bvid, title: dd.title,
+      videos: dd.pages.map((p) => ({
+        ...biliVideo({ bvid: dd.bvid, title: p.part, pic: p.first_frame || dd.pic, duration: p.duration, owner: dd.owner }),
+        page: p.page, url: `https://www.bilibili.com/video/${dd.bvid}?p=${p.page}`,
+      })),
+    };
+  }
+  return undefined;
+}
+
+// B 站合集 / 系列链接：space.bilibili.com/<mid>/lists/<sid>?type=season|series，
+// 以及旧版 /channel/collectiondetail?sid= 和 /channel/seriesdetail?sid=
+export function biliCollectionRef(u) {
+  if (!/^(space|m)\.bilibili\.com$/i.test(u.hostname)) return null;
+  const mid = pick(/^\/(?:space\/)?(\d+)\//, u.pathname);
+  if (!mid) return null;
+  let m = u.pathname.match(/\/lists\/(\d+)/);
+  if (m) return { mid, sid: m[1], type: u.searchParams.get('type') === 'series' ? 'series' : 'season' };
+  if (/\/channel\/collectiondetail/.test(u.pathname) && u.searchParams.get('sid')) return { mid, sid: u.searchParams.get('sid'), type: 'season' };
+  if (/\/channel\/seriesdetail/.test(u.pathname) && u.searchParams.get('sid')) return { mid, sid: u.searchParams.get('sid'), type: 'series' };
+  return null;
+}
+async function biliCollection({ mid, sid, type }, { cursor }) {
+  const c = decCursor(cursor) || {};
+  const pn = c.pn || 1, ps = 30;
+  const headers = { referer: `https://space.bilibili.com/${mid}/lists/${sid}?type=${type}` };
+  let archives = [], total = 0, title = c.title || '';
+  if (type === 'season') {
+    const d = await getJson(`https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?mid=${mid}&season_id=${sid}&page_num=${pn}&page_size=${ps}&sort_reverse=false`, { headers });
+    if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
+    archives = d.data.archives || [];
+    total = d.data.page?.total ?? d.data.meta?.total ?? 0;
+    title = title || d.data.meta?.name || '';
+  } else {
+    const d = await getJson(`https://api.bilibili.com/x/series/archives?mid=${mid}&series_id=${sid}&pn=${pn}&ps=${ps}&sort=asc&only_normal=true`, { headers });
+    if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
+    archives = d.data.archives || [];
+    total = d.data.page?.total ?? 0;
+    if (!title) {
+      try { title = (await getJson(`https://api.bilibili.com/x/series/series?series_id=${sid}`, { headers })).data?.meta?.name || ''; } catch {}
+    }
+  }
+  let author = c.author || '';
+  if (!author) {
+    try { author = (await getJson(`https://api.bilibili.com/x/web-interface/card?mid=${mid}`, { headers: BILI_REF })).data?.card?.name || ''; } catch {}
+  }
+  const authorUrl = `https://space.bilibili.com/${mid}`;
+  return {
+    author: title || author, total, source: 'collection',
+    videos: archives.map((a) => ({ ...biliVideo(a), author, authorUrl })),
+    next: pn * ps < total ? encCursor({ pn: pn + 1, title, author }) : null,
+    collection: { id: `bili-${type}-${sid}`, title: title || author },
+  };
 }
 // B 站 UP 主投稿列表。B 站风控较严，依次尝试多种方式，并把每一步的结果写进错误信息，方便排查：
 //   1) WBI 签名投稿接口（带 w_webid —— 2024 年起登录状态下需要）
@@ -493,9 +571,15 @@ export async function resolve({ url, cursor, ytKey }) {
 
   if (isYouTube(u.hostname)) {
     const id = ytVideoId(u);
-    if (id && !cursor) return { kind: 'video', video: await ytSingle(id) };
-    if (u.searchParams.get('list') || /^\/(@|channel\/|c\/|user\/)/.test(u.pathname)) {
+    const listId = u.searchParams.get('list');
+    if (id && !cursor) {
+      // 视频链接带 list=（播放列表里的某一集）：提示可以整个列表一起添加；RD 开头是自动生成的"合辑"，跳过
+      const playlistUrl = listId && !/^RD/.test(listId) ? `https://www.youtube.com/playlist?list=${listId}` : undefined;
+      return { kind: 'video', video: await ytSingle(id), playlistUrl };
+    }
+    if (listId || /^\/(@|channel\/|c\/|user\/)/.test(u.pathname)) {
       const r = await ytCreator(u, { cursor, ytKey });
+      if (listId) r.collection = { id: 'yt-' + listId, title: r.author };
       // 频道主页（非播放列表）：记下博主主页，便于按博主归类、查看更多视频
       const home = u.searchParams.get('list') ? null : 'https://www.youtube.com' + u.pathname.split('/').slice(0, u.pathname.startsWith('/@') ? 2 : 3).join('/');
       if (home) r.videos.forEach((v) => (v.authorUrl = v.authorUrl || home));
@@ -504,6 +588,11 @@ export async function resolve({ url, cursor, ytKey }) {
     throw fail('YT_URL');
   }
   if (/bilibili\.com$/.test(h)) {
+    const col = biliCollectionRef(u);
+    if (col) {
+      if (!transport) throw fail('NEED_HELPER_BILI');
+      return { kind: 'creator', ...(await biliCollection(col, { cursor })) };
+    }
     const mid = biliSpaceMid(u);
     if (mid) {
       if (!transport) throw fail('NEED_HELPER_BILI');
@@ -522,10 +611,14 @@ async function withHelper(fn, kind) {
   return { kind, ...(await fn()) };
 }
 // 单个视频：有助手 → 完整信息；没有 → 从链接识别（标题由家长填写）
+const asVideo = (v) => {
+  const { _collection, ...video } = v;
+  return { kind: 'video', video, collection: _collection };
+};
 async function single(u, full, { jsonpOk = false } = {}) {
-  if (transport) return { kind: 'video', video: await full() };
+  if (transport) return asVideo(await full());
   if (jsonpOk) {
-    try { return { kind: 'video', video: await full() }; } catch {}
+    try { return asVideo(await full()); } catch {}
   }
   const off = parseOffline(u.href);
   if (!off) throw fail('NEED_HELPER');

@@ -49,6 +49,8 @@ Playback never needs the helper. Embedded YouTube and Bilibili players are loade
 ## Other features
 
 - **Kids mode:** shows only videos in the library, with group chips and search. The parent area is protected by a 4-digit PIN.
+- **Collections:** a Bilibili video that belongs to a collection (合集) or has multiple parts (分P) offers "Add whole collection" — no helper needed. Bilibili collection links (`space.bilibili.com/<mid>/lists/<sid>`) and YouTube playlists (`list=`) are supported too. On the kids' home page a collection shows as one card that opens its episode list.
+- **Next episode:** the player always has a "Next episode" button for collections. YouTube, Xiaohongshu and direct video links count down 5 seconds and play the next episode (can be cancelled; can be turned off in Settings). The Bilibili player doesn't report when a video ends, so a "Next episode" prompt appears near the estimated end instead.
 - **Creator folders:** inside each category, videos are automatically grouped into second-level folders by creator (on both the kids' home page and the parent library).
 - **More from this creator:** any video in the library (or a lookup result) can open its creator's page so you can pick more videos to add.
 - **Paste share text:** when the pasted text has extra words around the link (e.g. Bilibili/Xiaohongshu/Douyin "share" text), the link is extracted automatically and the title is pre-filled.

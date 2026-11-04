@@ -20,7 +20,7 @@ function load() {
   const base = {
     videos: [],
     groups: DICT[browserLang].defaultGroups.slice(),
-    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0 },
+    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true },
     usage: { date: today(), sec: 0, bonus: 0 },
   };
   try {
@@ -202,6 +202,7 @@ function route() {
   document.title = 'KidsTube';
   const [, page, arg] = location.hash.split('/');
   if (page === 'watch') return renderWatch(arg);
+  if (page === 'series') return renderSeries(decodeURIComponent(arg || ''));
   if (page === 'parent') {
     if (!parentUnlocked) {
       location.hash = '#/';
@@ -245,10 +246,40 @@ function creatorsOf(list) {
   }
   return [...map.values()].sort((a, b) => b.count - a.count);
 }
-function videoCard(v) {
-  return `<a class="card" href="#/watch/${v.id}">
+// ---------- 合集：每个视频可带 series = { id, title, index }
+const seriesEps = (id) => db.videos.filter((x) => x.series?.id === id).sort((a, b) => a.series.index - b.series.index);
+const epNo = (v) => seriesEps(v.series.id).findIndex((x) => x.id === v.id) + 1;
+function nextEpisode(v) {
+  if (!v.series) return null;
+  const eps = seriesEps(v.series.id);
+  const i = eps.findIndex((x) => x.id === v.id);
+  return i >= 0 ? eps[i + 1] || null : null;
+}
+const durSec = (d) => String(d || '').split(':').reduce((a, b) => a * 60 + (Number(b) || 0), 0);
+
+function videoCard(v, { ep, current } = {}) {
+  return `<a class="card ${current ? 'current' : ''}" href="#/watch/${v.id}">
     <div class="thumb">${thumbImg(v)}<span class="plat plat-${v.platform}">${esc(platName(v.platform))}</span>${v.duration ? `<span class="dur">${esc(v.duration)}</span>` : ''}</div>
-    <div class="body"><div class="title">${esc(v.title)}</div><div class="sub">${esc(v.author || '')}</div></div></a>`;
+    <div class="body"><div class="title">${esc(v.title)}</div><div class="sub">${ep ? `<b class="ep-tag">${t('epN', ep)}</b> ` : ''}${esc(v.author || '')}</div></div></a>`;
+}
+function seriesCard(series, eps) {
+  const first = eps[0];
+  return `<a class="card stack" href="#/series/${encodeURIComponent(series.id)}">
+    <div class="thumb">${thumbImg(first)}<span class="plat plat-series">${ICON.folder(12)} ${t('collection')}</span><span class="dur">${t('episodesN', eps.length)}</span></div>
+    <div class="body"><div class="title">${esc(series.title)}</div><div class="sub">${esc(first.author || '')}</div></div></a>`;
+}
+// 首页：同一合集的视频合并成一张"合集"卡片（搜索时不合并，直接列出匹配的视频）
+function homeCards(list, merge) {
+  if (!merge) return list.map((v) => videoCard(v)).join('');
+  const done = new Set();
+  return list.map((v) => {
+    if (!v.series) return videoCard(v);
+    if (done.has(v.series.id)) return '';
+    const eps = list.filter((x) => x.series?.id === v.series.id).sort((a, b) => a.series.index - b.series.index);
+    if (eps.length < 2) return videoCard(v);
+    done.add(v.series.id);
+    return seriesCard(v.series, eps);
+  }).join('');
 }
 function renderHome() {
   const groups = db.groups.filter((g) => db.videos.some((v) => v.group === g));
@@ -265,7 +296,7 @@ function renderHome() {
     `<main class="wrap">
       ${db.videos.length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
       ${creators.length > 1 ? `<div class="chips sub">${[{ key: ALL, name: t('allCreators') }, ...creators].map((c) => `<button class="chip folder ${c.key === homeCreator ? 'on' : ''}" data-c="${esc(c.key)}">${ICON.folder(16)}<span>${esc(c.name)}</span>${c.count ? `<em>${c.count}</em>` : ''}</button>`).join('')}</div>` : ''}
-      ${list.length ? `<div class="grid">${list.map(videoCard).join('')}</div>`
+      ${list.length ? `<div class="grid">${homeCards(list, !q)}</div>`
         : db.videos.length ? `<div class="empty"><div class="big">${ICON.search(64)}</div><h2>${t('notFound')}</h2></div>`
         : `<div class="empty"><div class="big">${ICON.tv(72)}</div><h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`}
     </main>`;
@@ -281,6 +312,19 @@ function renderHome() {
     n.focus();
     n.setSelectionRange(pos, pos);
   };
+}
+
+function renderSeries(id) {
+  const eps = seriesEps(id);
+  if (!eps.length) { location.hash = '#/'; return; }
+  const ser = eps[0].series;
+  document.title = ser.title + ' · KidsTube';
+  app.innerHTML = topbar() + `<main class="wrap">
+      <div class="series-head"><a class="btn" href="#/">${t('back')}</a>
+        <div><h1>${esc(ser.title)}</h1><div class="hint" style="margin:0">${esc(eps[0].author || '')} · ${t('episodesN', eps.length)}</div></div></div>
+      <div class="grid">${eps.map((v, i) => videoCard(v, { ep: i + 1 })).join('')}</div>
+    </main>`;
+  bindTopbar();
 }
 
 // ------------------------------------------------------------ 播放器
@@ -302,16 +346,16 @@ const SHIELDS = {
   default: ['top'],
 };
 
-function mountIframe(box, v) {
+function mountIframe(box, v, onEnded) {
   const s = db.settings;
   box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       referrerpolicy="strict-origin-when-cross-origin" ${s.sandbox ? 'sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"' : ''}></iframe>
     ${s.shield ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}`;
-  if (v.platform === 'youtube') return watchYouTube(box);
+  if (v.platform === 'youtube') return watchYouTube(box, onEnded);
 }
 
 // YouTube IFrame API（postMessage）：暂停/结束时遮住"更多视频"推荐
-function watchYouTube(box) {
+function watchYouTube(box, onEnded) {
   const iframe = $('iframe', box);
   const cover = document.createElement('div');
   cover.className = 'yt-cover';
@@ -322,6 +366,7 @@ function watchYouTube(box) {
   iframe.addEventListener('load', () => { listen(); setTimeout(listen, 800); });
   const show = (state) => {
     if (state === 0) {
+      if (onEnded?.()) { cover.hidden = true; return; } // 有下一集：交给倒计时
       cover.innerHTML = `<div class="ended"><div class="big">${ICON.star(56)}</div><div>${t('ended')}</div><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div>`;
       cover.hidden = false;
     } else if (state === 2) {
@@ -349,8 +394,8 @@ function openExternal(url, w = 1100, h = 720) {
   window.open(url, 'kidstube_ext', `popup,width=${w},height=${h}`);
 }
 
-async function mountPlayer(box, v) {
-  if (v.playType === 'iframe') return mountIframe(box, v);
+async function mountPlayer(box, v, onEnded) {
+  if (v.playType === 'iframe') return mountIframe(box, v, onEnded);
   if (v.playType === 'external') {
     box.innerHTML = `<div class="msg"><div>${ICON.window(48)}</div><div>${t('extNeed')}</div><button class="btn primary" id="ext">${t('extOpen')}</button></div>`;
     $('#ext', box).onclick = () => openExternal(v.url);
@@ -376,6 +421,7 @@ async function mountPlayer(box, v) {
   box.innerHTML = `<video controls autoplay playsinline controlslist="nodownload" ${v.thumb ? `poster="${esc(v.thumb)}"` : ''}></video>`;
   const video = $('video', box);
   video.addEventListener('loadedmetadata', () => box.classList.toggle('portrait', video.videoHeight > video.videoWidth));
+  video.addEventListener('ended', () => onEnded?.());
   if (/\.m3u8(\?|$)/i.test(src) && !video.canPlayType('application/vnd.apple.mpegurl')) {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js');
     const hls = new window.Hls();
@@ -410,23 +456,50 @@ function renderWatch(id) {
   if (!v) { location.hash = '#/'; return; }
   if (usage().sec >= limitSec()) return renderRest();
   document.title = v.title + ' · KidsTube';
+  const eps = v.series ? seriesEps(v.series.id) : [];
+  const next = nextEpisode(v);
   const rank = (x) => (creatorKey(x) === creatorKey(v) ? 0 : x.group === v.group ? 1 : 2);
-  const more = db.videos.filter((x) => x.id !== v.id).sort((a, b) => rank(a) - rank(b)).slice(0, 12);
+  const more = db.videos.filter((x) => x.id !== v.id && !(v.series && x.series?.id === v.series.id)).sort((a, b) => rank(a) - rank(b)).slice(0, 12);
   app.innerHTML =
     topbar() +
     `<main class="wrap watch">
       <section>
         <div class="player" id="player"></div>
         <h1>${esc(v.title)}</h1>
-        <div class="meta">${esc(v.author || '')} · ${esc(platName(v.platform))}</div>
-        <div class="player-bar"><a class="btn" href="#/">${t('back')}</a><button class="btn" id="fs">${t('fullscreen')}</button></div>
+        <div class="meta">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · ${esc(v.series.title)} ${t('epOfN', epNo(v), eps.length)}` : ''}</div>
+        <div class="player-bar"><a class="btn" href="#/">${t('back')}</a><button class="btn" id="fs">${t('fullscreen')}</button>
+          ${next ? `<a class="btn primary" href="#/watch/${next.id}">${t('nextEp')} ▶</a>` : ''}</div>
       </section>
-      <aside class="side">${more.map(videoCard).join('')}</aside>
+      <aside class="side">
+        ${eps.length > 1 ? `<h3 class="side-title">${ICON.folder(16)} ${esc(v.series.title)}</h3>${eps.map((x, i) => videoCard(x, { ep: i + 1, current: x.id === v.id })).join('')}<h3 class="side-title">${t('moreVideos')}</h3>` : ''}
+        ${more.map((x) => videoCard(x)).join('')}
+      </aside>
     </main>`;
   bindTopbar();
   const box = $('#player');
-  let unmount;
-  Promise.resolve(mountPlayer(box, v)).then((fn) => (unmount = fn));
+  let unmount, countdown;
+  // 播放结束：有下一集且开启了自动播放 → 5 秒倒计时（可取消）
+  const onEnded = () => {
+    if (!next || !db.settings.autoplayNext || $('.next-cover', box)) return false;
+    let left = 5;
+    const el = document.createElement('div');
+    el.className = 'next-cover';
+    el.innerHTML = `<div class="next-label">${t('nextEp')}</div><div class="next-title">${esc(next.title)}</div>
+      <div class="next-count">${t('nextIn', left)}</div>
+      <div class="row" style="justify-content:center"><a class="btn primary" href="#/watch/${next.id}">${t('playNow')}</a><button class="btn" data-a="cancel">${t('cancel')}</button></div>`;
+    box.appendChild(el);
+    countdown = setInterval(() => {
+      left--;
+      if (left <= 0) { clearInterval(countdown); location.hash = '#/watch/' + next.id; return; }
+      $('.next-count', el).textContent = t('nextIn', left);
+    }, 1000);
+    $('[data-a="cancel"]', el).onclick = () => { clearInterval(countdown); el.remove(); };
+    return true;
+  };
+  Promise.resolve(mountPlayer(box, v, onEnded)).then((fn) => (unmount = fn));
+  // B 站播放器不会通知播放结束：按时长估算，快结束时只在底部提示"下一集"，不自动切换
+  const estimate = v.platform === 'bilibili' && v.playType === 'iframe' && next ? durSec(v.duration) : 0;
+  let watched = 0;
   // iPhone Safari 不支持对普通元素全屏，改用铺满屏幕的"伪全屏"（并提示横屏）
   const exitPseudo = () => { box.classList.remove('pseudo-fs'); document.body.classList.remove('no-scroll'); };
   $('#fs').onclick = () => {
@@ -445,6 +518,13 @@ function renderWatch(id) {
   const timer = setInterval(() => {
     if (document.hidden) return;
     usage().sec++;
+    if (estimate && ++watched === estimate + 2 && !$('.next-hint', box)) {
+      const hint = document.createElement('div');
+      hint.className = 'next-hint';
+      hint.innerHTML = `<span>${t('nextEp')}：${esc(next.title)}</span><a class="btn primary small" href="#/watch/${next.id}">${t('playNext')} ▶</a><button class="btn small" aria-label="close">✕</button>`;
+      $('button', hint).onclick = () => hint.remove();
+      box.appendChild(hint);
+    }
     if (usage().sec % 10 === 0) save();
     if (usage().sec >= limitSec()) {
       save();
@@ -454,7 +534,7 @@ function renderWatch(id) {
       renderRest();
     }
   }, 1000);
-  cleanup = () => { clearInterval(timer); unmount?.(); exitPseudo(); save(); };
+  cleanup = () => { clearInterval(timer); clearInterval(countdown); unmount?.(); exitPseudo(); save(); };
 }
 
 // ------------------------------------------------------------ 家长后台
@@ -484,11 +564,14 @@ function bindGroupSelect(sel) {
   });
 }
 const exists = (v) => db.videos.some((x) => x.platform === v.platform && x.vid === v.vid && (x.page || 1) === (v.page || 1));
-function addVideos(list, group) {
+// series：{ id, title, indexOf(v) } —— 作为合集加入时按集数排序；已在库里的视频会被补上合集信息
+function addVideos(list, group, series) {
   let n = 0;
   for (const v of list) {
-    if (exists(v)) continue;
-    db.videos.unshift({ ...v, src: v.playType === 'xhs' ? undefined : v.src, id: uid(), group, addedAt: Date.now() });
+    const ser = series ? { id: series.id, title: series.title, index: series.indexOf(v) } : undefined;
+    const old = db.videos.find((x) => x.platform === v.platform && x.vid === v.vid && (x.page || 1) === (v.page || 1));
+    if (old) { if (ser && !old.series) old.series = ser; continue; }
+    db.videos.unshift({ ...v, src: v.playType === 'xhs' ? undefined : v.src, id: uid(), group, addedAt: Date.now(), ...(ser ? { series: ser } : {}) });
     n++;
   }
   save();
@@ -540,7 +623,7 @@ function paneAdd(el) {
     out.innerHTML = `<div class="row" style="margin-top:20px"><div class="spin dark"></div>${t('parsing')}</div>`;
     try {
       const data = await api({ url });
-      if (data.kind === 'video') showSingle(out, data.video, data.manual && !sharedTitle, sharedTitle);
+      if (data.kind === 'video') showSingle(out, data.video, data.manual && !sharedTitle, sharedTitle, data);
       else showCreator(out, url, data);
     } catch (e) {
       out.innerHTML = `<p class="warn" style="margin-top:16px">${t('parseFail')}${esc(errText(e))}</p>`;
@@ -558,7 +641,7 @@ function paneAdd(el) {
   }
 }
 
-function showSingle(out, v, manual, suggested = '') {
+function showSingle(out, v, manual, suggested = '', extra = {}) {
   const warn = v.playType === 'external' ? `<p class="warn">${t('extWarn')}</p>`
     : v.platform === 'xiaohongshu' && v.isVideo === false ? `<p class="warn">${t('notVideoNote')}</p>` : '';
   const has = exists(v);
@@ -568,9 +651,13 @@ function showSingle(out, v, manual, suggested = '') {
       <div class="hint">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.duration ? ' · ' + esc(v.duration) : ''}</div>
       ${warn}${manual ? `<p class="hint">${t('manualHint')}</p>` : ''}
       <input class="field" id="title" value="${esc(v.title || suggested)}" placeholder="${t('titlePlaceholder')}" style="margin-bottom:10px" title="${t('editTitle')}">
+      ${extra.collection ? `<div class="collection-box">${ICON.folder(18)}<span class="grow">${esc(t('inCollection', extra.collection.title, extra.collection.videos.length))}</span><button class="btn primary small" id="add-col">${t('addWholeCollection')}</button></div>` : ''}
+      ${extra.playlistUrl ? `<div class="collection-box">${ICON.folder(18)}<span class="grow">${t('inPlaylist')}</span><button class="btn small" id="add-pl">${t('addWholePlaylist')}</button></div>` : ''}
       <div class="row"><button class="btn primary" id="add" ${has ? 'disabled' : ''}>${has ? t('inLib') : t('addToLib')}</button>
         ${canHaveCreator(v) ? `<button class="btn" id="more-creator">${t('moreFromCreator')}</button>` : ''}</div></div></div>`;
   if ($('#more-creator')) $('#more-creator').onclick = (e) => openCreatorOf(v, e.currentTarget);
+  if ($('#add-col')) $('#add-col').onclick = () => showCreator(out, null, { author: extra.collection.title, videos: extra.collection.videos, next: null, collection: extra.collection });
+  if ($('#add-pl')) $('#add-pl').onclick = () => { $('#url').value = extra.playlistUrl; $('#go').click(); };
   if (manual) $('#title').focus();
   $('#add').onclick = () => {
     const title = $('#title').value.trim() || v.title;
@@ -589,8 +676,12 @@ const canHaveCreator = (v) => !!v.authorUrl || v.platform === 'youtube' || (v.pl
 function showCreator(out, url, data) {
   const items = [...data.videos];
   const chosen = new Set();
+  const keyOf = (v) => v.vid + (v.page ? '#' + v.page : '');
+  const col = data.collection;
+  if (col) items.forEach((v) => !exists(v) && chosen.add(keyOf(v))); // 合集默认全选
   let next = data.next, loading = false;
-  out.innerHTML = `<h3>${esc(t('creatorVideos', data.author))} <span class="badge" id="cnt"></span></h3>
+  out.innerHTML = `<h3>${col ? ICON.folder(18) + ' ' + esc(t('collectionTitle', col.title)) : esc(t('creatorVideos', data.author))} <span class="badge" id="cnt"></span></h3>
+    ${col ? `<label class="inline" style="margin-bottom:10px"><input type="checkbox" id="as-series" checked> ${t('asSeries')}</label>` : ''}
     ${data.noteCode ? `<p class="hint">${esc(L().err[data.noteCode] || '')}</p>` : ''}
     ${data.source ? `<p class="hint" style="margin:0 0 8px">${t('listSource')}: ${t('src_' + data.source)}</p>` : ''}
     ${data.partial ? `<div class="warn row" style="margin-bottom:12px"><span class="grow">${t('biliPartial')}</span><button class="btn small" id="refetch">${t('refetchFull')}</button></div>` : ''}
@@ -603,8 +694,8 @@ function showCreator(out, url, data) {
   const visible = () => items.filter((v) => !ft() || v.title.toLowerCase().includes(ft()));
   const draw = () => {
     $('#picks').innerHTML = visible().map((v) => {
-      const added = exists(v), on = chosen.has(v.vid);
-      return `<div class="pick ${on ? 'on' : ''} ${added ? 'added' : ''}" data-vid="${esc(v.vid)}">
+      const added = exists(v), on = chosen.has(keyOf(v));
+      return `<div class="pick ${on ? 'on' : ''} ${added ? 'added' : ''}" data-vid="${esc(keyOf(v))}">
         <div class="thumb">${thumbImg(v)}${v.duration ? `<span class="dur">${esc(v.duration)}</span>` : ''}</div>
         <span class="check">${added || on ? '✓' : ''}</span><div class="title">${added ? t('addedTag') : ''}${esc(v.title)}</div></div>`;
     }).join('');
@@ -618,8 +709,9 @@ function showCreator(out, url, data) {
     $('#more').textContent = t('loadingMore');
     try {
       const d = await api({ url, cursor: next });
-      const seen = new Set(items.map((v) => v.vid));
-      d.videos.forEach((v) => !seen.has(v.vid) && items.push(v));
+      const seen = new Set(items.map(keyOf));
+      d.videos.forEach((v) => !seen.has(keyOf(v)) && items.push(v));
+      if (col) d.videos.forEach((v) => !exists(v) && chosen.add(keyOf(v)));
       next = d.next;
     } catch (e) {
       toast(t('loadFail') + errText(e));
@@ -637,7 +729,7 @@ function showCreator(out, url, data) {
     chosen.has(p.dataset.vid) ? chosen.delete(p.dataset.vid) : chosen.add(p.dataset.vid);
     draw();
   };
-  $('#all').onclick = () => { visible().forEach((v) => !exists(v) && chosen.add(v.vid)); draw(); };
+  $('#all').onclick = () => { visible().forEach((v) => !exists(v) && chosen.add(keyOf(v))); draw(); };
   $('#none').onclick = () => { chosen.clear(); draw(); };
   $('#filter').oninput = draw;
   $('#more').onclick = loadMore;
@@ -649,7 +741,11 @@ function showCreator(out, url, data) {
   $('#addsel').onclick = () => {
     if (!chosen.size) return toast(t('pickFirst'));
     lastGroup = $('#grp').value;
-    const n = addVideos(items.filter((v) => chosen.has(v.vid)), lastGroup);
+    const asSeries = col && $('#as-series')?.checked;
+    const picked = items.filter((v) => chosen.has(keyOf(v)));
+    // 作为合集加入：已在库里的同合集视频也一起补上合集信息（便于连续播放）
+    const n = addVideos(asSeries ? items.filter((v) => chosen.has(keyOf(v)) || exists(v)) : picked, lastGroup,
+      asSeries ? { id: col.id, title: col.title, indexOf: (v) => items.indexOf(v) } : undefined);
     chosen.clear();
     draw();
     toast(t('addedN', n, lastGroup));
@@ -673,7 +769,7 @@ function paneLibrary(el) {
     $('#libbody').innerHTML = list.map((v) => `<tr data-id="${v.id}">
       <td style="width:120px">${v.thumb ? `<img src="${esc(v.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt="">` : ''}</td>
       <td><div class="t" contenteditable="true" data-f="title" title="${t('editTitle')}">${esc(v.title)}</div>
-        <div class="s">${esc(v.author || '')} · ${esc(platName(v.platform))} · <a href="${esc(v.url)}" target="_blank" rel="noopener">${t('original')}</a></div></td>
+        <div class="s">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · ${esc(v.series.title)} ${t('epOfN', epNo(v), seriesEps(v.series.id).length)}` : ''} · <a href="${esc(v.url)}" target="_blank" rel="noopener">${t('original')}</a></div></td>
       <td><select data-f="group">${db.groups.map((g) => `<option ${g === v.group ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td>
       <td class="acts">${canHaveCreator(v) ? `<button class="btn small" data-more>${t('moreFromCreator')}</button>` : ''}<button class="btn danger small" data-del>${t('del')}</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">${t('noVideos')}</td></tr>`;
   };
@@ -832,6 +928,9 @@ function paneSettings(el) {
       <label>${t('dailyLimit')}</label>
       <div class="row" style="margin:6px 0 4px"><input class="field" type="number" min="0" step="5" id="limit" value="${s.dailyLimit}" style="width:140px">
         <span class="hint" style="margin:0">${t('watchedToday', Math.floor(u.sec / 60))}</span><button class="btn small" id="reset">${t('resetToday')}</button></div>
+      <h3>${t('nextEp')}</h3>
+      <label class="inline"><input type="checkbox" id="autoplay-next" ${s.autoplayNext ? 'checked' : ''}> ${t('autoplayNext')}</label>
+      <p class="hint">${t('autoplayHint')}</p>
       <h3>${t('lockTitle')}</h3>
       <label class="inline"><input type="checkbox" id="shield" ${s.shield ? 'checked' : ''}> ${t('shield')}</label>
       <p class="hint">${t('shieldHint')}</p>
@@ -846,6 +945,7 @@ function paneSettings(el) {
   $('#save').onclick = () => {
     s.dailyLimit = Math.max(0, Number($('#limit').value) || 0);
     s.shield = $('#shield').checked;
+    s.autoplayNext = $('#autoplay-next').checked;
     s.sandbox = $('#sandbox').checked;
     save();
     toast(t('saved'));
