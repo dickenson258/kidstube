@@ -58,6 +58,7 @@ Playback never needs the helper. Embedded YouTube and Bilibili players are loade
 - **Daily watch-time limit:** a parent can add 15 more minutes with the PIN.
 - **Memberships / ad-free viewing:** sign in to each site in the same browser. YouTube Premium needs "Use my signed-in account" turned on.
   - Embedded players need third-party cookies allowed. On iPhone this means turning off "Prevent cross-site tracking" in Safari.
+- **Xiaohongshu on phones:** the mobile site often only offers "Open app". Switch the browser to the desktop site to sign in. If that still fails, copy the `Cookie` request header from a signed-in computer browser and paste it under 🔒 → Accounts → Xiaohongshu (helper 1.3.0+). The helper keeps it in the userscript manager's storage and attaches it only to its own xiaohongshu.com requests; the page can't read it.
 - **Phones:** responsive layout, add to home screen, and in-page fullscreen fallback on iPhone.
 - **Backup / transfer:** export and import the list as JSON. Since data is stored per browser, this is how you move a list to a child's tablet.
 

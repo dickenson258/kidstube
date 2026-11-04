@@ -1,7 +1,7 @@
 // KidsTube 前端 —— 所有数据只保存在本浏览器 localStorage，不上传任何服务器
 import { DICT } from './i18n.js';
 import * as R from './resolver.js';
-import { detectHelper, onHelper, helperRequest, helperVersion, pingHelper } from './bridge.js';
+import { detectHelper, onHelper, helperRequest, helperVersion, pingHelper, helperHasXhsCookie, helperSetXhsCookie } from './bridge.js';
 
 // 检测到 KidsTube 助手后，跨域请求改由助手发出
 onHelper(() => R.setTransport(helperRequest));
@@ -830,6 +830,29 @@ const LOGINS = [
   { key: 'youku', url: 'https://www.youku.com/', color: '#1f8cff' },
   { key: 'iqiyi', url: 'https://www.iqiyi.com/', color: '#00be06' },
 ];
+const verAtLeast = (v, min) => {
+  const a = String(v || '0').split('.').map(Number), b = min.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i];
+  return true;
+};
+function xhsCookieBox(ver) {
+  const has = helperHasXhsCookie();
+  return `<details class="xhs-cookie"${has ? '' : ''}><summary>${t('xhsCookieTitle')}${has ? ` <span class="badge ok">${t('xhsCookieSaved')}</span>` : ''}</summary>
+    <div class="steps">${t('xhsCookieSteps')}</div>
+    ${ver && !verAtLeast(ver, '1.3.0') ? `<p class="warn">${t('xhsCookieOld')}</p>` : ''}
+    <textarea class="field" id="xhscookie" rows="3" placeholder="a1=…; webId=…; web_session=…" autocomplete="off" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn small primary" id="xhscookie-save">${t('save')}</button>
+    ${has ? `<button class="btn small" id="xhscookie-clear">${t('xhsCookieClear')}</button>` : ''}</div>
+    <p class="hint">${t('xhsCookiePrivacy')}</p></details>`;
+}
+async function saveXhsCookie(value, el) {
+  if (!helperVersion()) return toast(t('helperOff'));
+  if (!verAtLeast(helperVersion(), '1.3.0')) return toast(t('xhsCookieOld'));
+  if (value && !/(^|;\s*)web_session=/.test(value.replace(/^\s*cookie\s*:\s*/i, ''))) return toast(t('xhsCookieBad'));
+  const ok = await helperSetXhsCookie(value);
+  toast(ok ? (value ? t('xhsCookieDone') : t('xhsCookieCleared')) : t('xhsCookieBad'));
+  if (ok) paneAccounts(el);
+}
 function paneAccounts(el) {
   const s = db.settings, ver = helperVersion();
   el.innerHTML = `<div class="panel"><h2>${t('helperTitle')} <span class="badge ${ver ? 'ok' : ''}">${ver ? t('helperOn', ver) : t('helperOff')}</span></h2>
@@ -849,7 +872,7 @@ function paneAccounts(el) {
     <div class="login-list">${LOGINS.map((p) => `<div class="login-item">
       <div class="name"><span class="dot" style="background:${p.color}"></span>${esc(platName(p.key))}</div>
       <div class="hint" style="margin:0 0 10px">${t('note_' + p.key)}</div>
-      <button class="btn small" data-login="${p.url}">${t('openLogin')}</button></div>`).join('')}</div>
+      <button class="btn small" data-login="${p.url}">${t('openLogin')}</button>${p.key === 'xiaohongshu' ? xhsCookieBox(ver) : ''}</div>`).join('')}</div>
 
     <h3>${t('ytSettings')}</h3>
     <label class="inline"><input type="checkbox" id="ytlogin" ${s.ytLoggedIn ? 'checked' : ''}> ${t('ytLogin')}</label>
@@ -860,6 +883,8 @@ function paneAccounts(el) {
     <div class="row" style="margin-top:14px"><button class="btn primary" id="save">${t('save')}</button></div></div>`;
   el.querySelectorAll('[data-login]').forEach((b) => (b.onclick = () => window.open(b.dataset.login, '_blank', 'popup,width=1000,height=760')));
   $('#recheck').onclick = () => location.reload();
+  $('#xhscookie-save').onclick = () => saveXhsCookie($('#xhscookie').value.trim(), el);
+  if ($('#xhscookie-clear')) $('#xhscookie-clear').onclick = () => saveXhsCookie('', el);
   $('#selftest').onclick = () => runSelfTest();
   $('#copytest').onclick = async () => {
     try { await navigator.clipboard.writeText($('#testout').textContent); toast(t('helperTestCopied')); }

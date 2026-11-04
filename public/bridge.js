@@ -2,12 +2,17 @@
 const pending = new Map();
 const waiters = new Set();
 let version = null;
+let xhsCookie = false;
 const nonceWaiters = new Map();
 
 window.addEventListener('message', (e) => {
   if (e.source !== window || !e.data || typeof e.data !== 'object') return;
   const d = e.data;
-  if (d.__kt === 'pong') {
+  if (d.__kt === 'cookieSet') {
+    xhsCookie = !!d.xhs;
+    if (d.nonce && nonceWaiters.has(d.nonce)) { nonceWaiters.get(d.nonce)(d); nonceWaiters.delete(d.nonce); }
+  } else if (d.__kt === 'pong') {
+    xhsCookie = !!d.xhs;
     if (d.nonce && nonceWaiters.has(d.nonce)) { nonceWaiters.get(d.nonce)(d.version); nonceWaiters.delete(d.nonce); }
     version = d.version || '1';
     waiters.forEach((f) => f(version));
@@ -22,6 +27,17 @@ window.addEventListener('message', (e) => {
 });
 
 export const helperVersion = () => version;
+export const helperHasXhsCookie = () => xhsCookie;
+
+// 把电脑上复制的小红书 Cookie 交给助手保存（空字符串表示清除）。返回 true/false；旧版助手不支持时返回 null
+export function helperSetXhsCookie(value, timeout = 70000) {
+  return new Promise((resolve) => {
+    const nonce = Math.random().toString(36).slice(2);
+    nonceWaiters.set(nonce, (r) => resolve(!!r.ok));
+    window.postMessage({ __kt: 'setCookie', site: 'xiaohongshu', value, nonce }, location.origin);
+    setTimeout(() => { if (nonceWaiters.delete(nonce)) resolve(null); }, timeout);
+  });
+}
 
 // 等待助手应答（脚本在 document-end 注入，可能比本模块晚）
 export function detectHelper(timeout = 1500) {

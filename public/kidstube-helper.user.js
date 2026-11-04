@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KidsTube 助手 / KidsTube Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.2.2
+// @version      1.3.0
 // @description  让 KidsTube 网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets KidsTube look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
@@ -48,7 +48,7 @@
   'use strict';
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.2.2';
+  const VERSION = '1.3.0';
   const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhslink\.cn|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
@@ -85,10 +85,16 @@
     return approval;
   }
 
+  // 手机上无法登录小红书时，家长可以把电脑上复制的 Cookie 交给助手保存（只存在脚本管理器里，网页读不到）
+  const XHS_HOST = /(^|\.)xiaohongshu\.com$/i;
+  let xhsCookie = '';
+  const cookieReady = getValue('xhsCookie', '').then((v) => (xhsCookie = v || ''));
+
   function send(d) {
     // 网页不能直接设置 Cookie 请求头；交给脚本管理器的 cookie 选项（会合并进浏览器已有的 Cookie）
     const headers = { ...(d.headers || {}) };
-    const cookie = headers.cookie || headers.Cookie;
+    let cookie = headers.cookie || headers.Cookie;
+    if (!cookie && xhsCookie && XHS_HOST.test(new URL(d.url).hostname)) cookie = xhsCookie;
     delete headers.cookie;
     delete headers.Cookie;
     return new Promise((resolve, reject) => {
@@ -118,7 +124,20 @@
     // 会导致收不到网页的任何请求（表现为"助手请求超时"）。改为校验消息来源网址。
     if (e.origin !== origin || !e.data || typeof e.data !== 'object') return;
     const d = e.data;
-    if (d.__kt === 'ping') return post({ __kt: 'pong', version: VERSION, nonce: d.nonce });
+    if (d.__kt === 'ping') { await cookieReady; return post({ __kt: 'pong', version: VERSION, nonce: d.nonce, xhs: !!xhsCookie }); }
+    if (d.__kt === 'setCookie') {
+      const done = (ok) => post({ __kt: 'cookieSet', nonce: d.nonce, ok, xhs: !!xhsCookie });
+      if (d.site !== 'xiaohongshu' || typeof d.value !== 'string' || d.value.length > 16000) return done(false);
+      let ok;
+      try { ok = await within(ensureApproved(), 60000, 'approval'); } catch { ok = false; }
+      if (!ok) return done(false);
+      // 允许粘贴整行 "Cookie: a=1; b=2"，去掉换行
+      const v = d.value.replace(/^\s*cookie\s*:\s*/i, '').replace(/[\r\n]+/g, ' ').trim();
+      if (v && !/(^|;\s*)web_session=/.test(v)) return done(false);
+      xhsCookie = v;
+      await setValue('xhsCookie', v);
+      return done(true);
+    }
     if (d.__kt !== 'req' || !d.id) return;
     const reply = (o, transfer) => post({ __kt: 'res', id: d.id, ...o }, transfer);
     try {
@@ -144,5 +163,5 @@
     }
   });
 
-  post({ __kt: 'pong', version: VERSION });
+  cookieReady.then(() => post({ __kt: 'pong', version: VERSION, xhs: !!xhsCookie }));
 })();
