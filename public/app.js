@@ -114,6 +114,16 @@ function sha256js(bytes) {
   }
   return H.map((v) => v.toString(16).padStart(8, '0')).join('');
 }
+// 内嵌 SVG 图标：不依赖设备是否有 emoji 字体
+const svg = (body, size = 24) => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const ICON = {
+  lock: (n) => svg('<rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>', n),
+  search: (n) => svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', n),
+  tv: (n) => svg('<rect x="3" y="6" width="18" height="13" rx="3"/><path d="m8 2 4 4 4-4"/><path d="m10.5 10 4 2.5-4 2.5z" fill="currentColor"/>', n),
+  moon: (n) => svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>', n),
+  star: (n) => svg('<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>', n),
+  window: (n) => svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M14 13h4v4"/><path d="m18 13-5 5"/>', n),
+};
 const thumbImg = (v) => (v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '');
 
 // PIN 输入框：mode = 'verify' | 'set'
@@ -211,7 +221,7 @@ function topbar(extra = '') {
   return `<header class="topbar">
     <a class="logo" href="#/"><img src="icon.svg" alt=""><span>Kids<b>Tube</b></span></a>
     <div class="spacer"></div>${extra}${langBtn()}
-    <button class="btn icon-btn" id="parent-btn" title="${t('parentArea')}" aria-label="${t('parentArea')}">🔒</button>
+    <button class="btn icon-btn" id="parent-btn" title="${t('parentArea')}" aria-label="${t('parentArea')}">${ICON.lock(20)}</button>
   </header>`;
 }
 function bindTopbar() {
@@ -238,8 +248,8 @@ function renderHome() {
     `<main class="wrap">
       ${db.videos.length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
       ${list.length ? `<div class="grid">${list.map(videoCard).join('')}</div>`
-        : db.videos.length ? `<div class="empty"><div class="big">🔍</div><h2>${t('notFound')}</h2></div>`
-        : `<div class="empty"><div class="big">📺</div><h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`}
+        : db.videos.length ? `<div class="empty"><div class="big">${ICON.search(64)}</div><h2>${t('notFound')}</h2></div>`
+        : `<div class="empty"><div class="big">${ICON.tv(72)}</div><h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`}
     </main>`;
   bindTopbar();
   app.querySelectorAll('.chip').forEach((c) => (c.onclick = () => { homeGroup = c.dataset.g; renderHome(); }));
@@ -293,7 +303,7 @@ function watchYouTube(box) {
   iframe.addEventListener('load', () => { listen(); setTimeout(listen, 800); });
   const show = (state) => {
     if (state === 0) {
-      cover.innerHTML = `<div class="ended"><div class="big">🎉</div><div>${t('ended')}</div><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div>`;
+      cover.innerHTML = `<div class="ended"><div class="big">${ICON.star(56)}</div><div>${t('ended')}</div><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div>`;
       cover.hidden = false;
     } else if (state === 2) {
       cover.innerHTML = `<button class="play-big" data-a="play" aria-label="play">▶</button>`;
@@ -323,7 +333,7 @@ function openExternal(url, w = 1100, h = 720) {
 async function mountPlayer(box, v) {
   if (v.playType === 'iframe') return mountIframe(box, v);
   if (v.playType === 'external') {
-    box.innerHTML = `<div class="msg"><div style="font-size:48px">🪟</div><div>${t('extNeed')}</div><button class="btn primary" id="ext">${t('extOpen')}</button></div>`;
+    box.innerHTML = `<div class="msg"><div>${ICON.window(48)}</div><div>${t('extNeed')}</div><button class="btn primary" id="ext">${t('extOpen')}</button></div>`;
     $('#ext', box).onclick = () => openExternal(v.url);
     return;
   }
@@ -365,7 +375,7 @@ function loadScript(src) {
 
 // ------------------------------------------------------------ 播放页
 function renderRest() {
-  app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">🌙</div><h1>${t('restTitle')}</h1><p class="hint">${t('restBody')}</p>
+  app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${ICON.moon(88)}</div><h1>${t('restTitle')}</h1><p class="hint">${t('restBody')}</p>
     <button class="btn" id="more">${t('restMore')}</button></main>`;
   bindTopbar();
   $('#more').onclick = async () => {
