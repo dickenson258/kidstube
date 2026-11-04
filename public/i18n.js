@@ -163,6 +163,7 @@ export const DICT = {
       youku: '优酷', iqiyi: '爱奇艺', mgtv: '芒果TV', ixigua: '西瓜视频', dailymotion: 'Dailymotion', direct: '视频文件', other: '其他',
     },
     err: {
+      NOT_VIDEO: '这个链接既不是视频，也不是能识别的博主主页',
       HELPER_APPROVAL: '助手在等待你确认授权，但 60 秒内没有收到确认（授权弹窗可能被浏览器拦截了）',
       NEED_HELPER_BILI: '导入 B 站 UP 主主页需要安装 KidsTube 助手：B 站不允许普通网页读取 UP 主的视频列表（单个视频链接不需要助手）。见"账号与会员"',
       NEED_HELPER: '这个链接需要安装 KidsTube 助手才能解析（见"账号与会员"）',
@@ -351,6 +352,7 @@ export const DICT = {
       youku: 'Youku', iqiyi: 'iQIYI', mgtv: 'Mango TV', ixigua: 'Xigua', dailymotion: 'Dailymotion', direct: 'Video file', other: 'Other',
     },
     err: {
+      NOT_VIDEO: "This link is neither a video nor a recognised creator page",
       HELPER_APPROVAL: 'The helper was waiting for your approval but got none within 60 seconds (the browser may have blocked the approval prompt)',
       NEED_HELPER_BILI: 'Importing a Bilibili creator page needs the KidsTube Helper: Bilibili doesn’t let ordinary web pages read a creator’s video list (single video links work without it). See "Accounts"',
       NEED_HELPER: 'This link needs the KidsTube Helper (see "Accounts")',

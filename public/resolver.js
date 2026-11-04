@@ -289,9 +289,19 @@ const biliVideo = (v) => ({
   authorUrl: v.owner?.mid || v.mid ? `https://space.bilibili.com/${v.owner?.mid || v.mid}` : undefined,
   duration: typeof v.duration === 'number' ? fmtDur(v.duration) : v.length || v.duration || '', thumb: https(v.pic),
 });
+// UP 主主页的各种写法：电脑版 space.bilibili.com/123、手机版 m.bilibili.com/space/123、
+// www.bilibili.com/space/123，以及 b23.tv 短链接展开后的这些地址
+export function biliSpaceMid(u) {
+  if (/^space\.bilibili\.com$/i.test(u.hostname)) return pick(/^\/(\d+)/, u.pathname) || null;
+  return pick(/^\/space\/(\d+)/, u.pathname) || null;
+}
+// 只有番剧、课程这类页面才当作"无法嵌入、在原网站窗口播放"的视频
+const BILI_EXTERNAL = /^\/(bangumi\/play|cheese\/play|festival)\//;
+
 async function biliSingle(u) {
   const off = parseOffline(u.href);
   if (!off) {
+    if (!BILI_EXTERNAL.test(u.pathname)) throw fail('NOT_VIDEO');
     // 番剧/课程等无法外嵌，只能在原网站窗口播放
     if (!transport) throw fail('NEED_HELPER');
     const { text } = await getText(u.href);
@@ -483,9 +493,10 @@ export async function resolve({ url, cursor, ytKey }) {
     throw fail('YT_URL');
   }
   if (/bilibili\.com$/.test(h)) {
-    if (/^space\./.test(u.hostname)) {
+    const mid = biliSpaceMid(u);
+    if (mid) {
       if (!transport) throw fail('NEED_HELPER_BILI');
-      return { kind: 'creator', ...(await biliCreator(u, { cursor })) };
+      return { kind: 'creator', ...(await biliCreator(new URL(`https://space.bilibili.com/${mid}`), { cursor })) };
     }
     return single(u, () => biliSingle(u), { jsonpOk: true });
   }
