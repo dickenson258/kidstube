@@ -222,12 +222,31 @@ async function ytChannelInfo(u) {
   if (!id) throw fail('YT_CHANNEL');
   return { id, name: meta(text, 'og:title') || id };
 }
-async function ytCreator(u, { cursor, ytKey }) {
-  const c = decCursor(cursor);
-  const listId = u.searchParams.get('list');
+// YouTube Data API：始终由网页直接请求（允许跨域）。不经过助手，因为助手发出的请求不带网页来源（Referer），
+// 限制了"网站"的 API Key 会被拒绝（403）。出错时显示 Google 给出的原因。
+async function ytApi(url) {
+  let status, text;
+  if (typeof fetch === 'function') { const r = await fetch(url); status = r.status; text = await r.text(); }
+  else { const r = await request(url); status = r.status; text = r.data; }
+  let j;
+  try { j = JSON.parse(text); } catch { throw fail('HTTP', `${status} www.googleapis.com`); }
+  if (j.error) throw fail('YT_API', `${status} ${j.error.errors?.[0]?.reason || j.error.status || ''} ${j.error.message || ''}`.replace(/<[^>]+>/g, '').trim());
+  return j;
+}
 
-  // 有 API Key：Data API 允许网页直接跨域调用，无需助手
-  if (ytKey) {
+async function ytCreator(u, opts) {
+  const c = decCursor(opts.cursor);
+  // 有 API Key：先用 Data API；失败时如果装了助手，第一页改用网页内部接口
+  if (opts.ytKey && !c?.token) {
+    try { return await ytCreatorApi(u, c, opts.ytKey); }
+    catch (e) { if (!transport || c?.pageToken) throw e; }
+  }
+  return ytCreatorWeb(u, c);
+}
+
+async function ytCreatorApi(u, c, ytKey) {
+  const listId = u.searchParams.get('list');
+  {
     let playlistId = c?.playlistId || listId, author = c?.author || '';
     if (!playlistId) {
       const id = pick(/^\/channel\/(UC[\w-]{22})/, u.pathname);
@@ -235,23 +254,26 @@ async function ytCreator(u, { cursor, ytKey }) {
       const user = pick(/^\/user\/([^/]+)/, u.pathname);
       let q = id ? `id=${id}` : handle ? `forHandle=${encodeURIComponent(decodeURIComponent(handle))}` : user ? `forUsername=${user}` : null;
       if (!q) q = `id=${(await ytChannelInfo(u)).id}`; // /c/xxx 需要助手读取页面
-      const ch = (await getJson(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails,snippet&${q}&key=${ytKey}`)).items?.[0];
+      const ch = (await ytApi(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails,snippet&${q}&key=${ytKey}`)).items?.[0];
       if (!ch) throw fail('YT_NOT_FOUND');
       playlistId = ch.contentDetails.relatedPlaylists.uploads;
       author = ch.snippet.title;
     }
-    const d = await getJson(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${ytKey}` + (c?.pageToken ? `&pageToken=${c.pageToken}` : ''));
+    const d = await ytApi(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${ytKey}` + (c?.pageToken ? `&pageToken=${c.pageToken}` : ''));
     if (d.error) throw fail('YT_API', d.error.message);
     const videos = (d.items || []).map((it) => it.snippet)
       .filter((s) => s.resourceId?.videoId && s.title !== 'Private video' && s.title !== 'Deleted video')
       .map((s) => ytVideo(s.resourceId.videoId, s.title, s.videoOwnerChannelTitle || author || s.channelTitle));
     if (listId && !c?.pageToken) {
-      try { author = (await getJson(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${listId}&key=${ytKey}`)).items?.[0]?.snippet?.title || author; } catch {}
+      try { author = (await ytApi(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${listId}&key=${ytKey}`)).items?.[0]?.snippet?.title || author; } catch {}
     }
     return { author: author || 'YouTube', total: d.pageInfo?.totalResults, videos, next: d.nextPageToken ? encCursor({ playlistId, author, pageToken: d.nextPageToken }) : null };
   }
+}
 
-  // 无 Key：通过助手调用 YouTube 网页内部接口
+// 无 Key（或 Key 失败）：通过助手调用 YouTube 网页内部接口
+async function ytCreatorWeb(u, c) {
+  const listId = u.searchParams.get('list');
   if (!transport) throw fail('NEED_HELPER_OR_KEY');
   if (c?.token) {
     const r = await ytBrowse({ continuation: c.token });
