@@ -142,7 +142,8 @@ const RULES = [
   { re: /iqiyi\.com\/(v_\w+)/, platform: 'iqiyi', embed: null },
   { re: /mgtv\.com\/b\/\d+\/(\d+)/, platform: 'mgtv', embed: null },
 ];
-const SHORT_HOSTS = /^(b23\.tv|bili2233\.cn|xhslink\.com|v\.douyin\.com|vm\.tiktok\.com|url\.cn)$/;
+// 短链接：需要先跟随跳转拿到真实地址（小红书新版分享用 xhslink.cn）
+const SHORT_HOSTS = /^(b23\.tv|bili2233\.cn|xhslink\.com|xhslink\.cn|v\.douyin\.com|vm\.tiktok\.com|url\.cn)$/;
 const isYouTube = (h) => /(^|\.)youtube\.com$|^youtu\.be$|youtube-nocookie\.com$/.test(h);
 
 function ytVideoId(u) {

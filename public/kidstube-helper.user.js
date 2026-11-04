@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KidsTube 助手 / KidsTube Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.2.1
+// @version      1.2.2
 // @description  让 KidsTube 网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets KidsTube look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
@@ -20,6 +20,7 @@
 // @connect      bili2233.cn
 // @connect      xiaohongshu.com
 // @connect      xhslink.com
+// @connect      xhslink.cn
 // @connect      xhscdn.com
 // @connect      youtube.com
 // @connect      youtu.be
@@ -47,8 +48,8 @@
   'use strict';
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.2.1';
-  const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
+  const VERSION = '1.2.2';
+  const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhslink\.cn|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
   const getValue = (k, d) => (typeof GM !== 'undefined' && GM.getValue ? GM.getValue(k, d) : Promise.resolve(GM_getValue(k, d)));
