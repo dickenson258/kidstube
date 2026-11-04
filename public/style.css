@@ -233,3 +233,17 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .lib td.acts .btn { margin-left: 4px; }
 
 .testout { background: var(--bg); border: 2px solid var(--line); border-radius: 12px; padding: 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-top: 10px; }
+
+/* 手机：视频库改为卡片式，避免标题列被挤成一字一行 */
+@media (max-width: 640px) {
+  .lib, .lib tbody { display: block; }
+  .lib tr { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .lib td { display: block; padding: 0; border: 0; }
+  .lib td:first-child { grid-row: 1 / span 3; width: auto !important; }
+  .lib td:only-child { grid-column: 1 / -1; }
+  .lib img { width: 96px; }
+  .lib .t { font-size: 15px; line-height: 1.35; word-break: break-word; }
+  .lib select { max-width: 100%; }
+  .lib td.acts { text-align: left; white-space: normal; }
+  .lib td.acts .btn { margin: 0 6px 6px 0; }
+}

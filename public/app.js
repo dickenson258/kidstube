@@ -592,6 +592,8 @@ function showCreator(out, url, data) {
   let next = data.next, loading = false;
   out.innerHTML = `<h3>${esc(t('creatorVideos', data.author))} <span class="badge" id="cnt"></span></h3>
     ${data.noteCode ? `<p class="hint">${esc(L().err[data.noteCode] || '')}</p>` : ''}
+    ${data.source ? `<p class="hint" style="margin:0 0 8px">${t('listSource')}: ${t('src_' + data.source)}</p>` : ''}
+    ${data.partial ? `<div class="warn row" style="margin-bottom:12px"><span class="grow">${t('biliPartial')}</span><button class="btn small" id="refetch">${t('refetchFull')}</button></div>` : ''}
     <div class="row"><button class="btn small" id="all">${t('selectAll')}</button><button class="btn small" id="none">${t('selectNone')}</button>
       <input class="field grow" id="filter" placeholder="${t('filter')}" style="padding:8px 12px">
       <button class="btn small" id="more">${t('loadMore')}</button><button class="btn small" id="loadall">${t('loadAll')}</button></div>
@@ -628,6 +630,7 @@ function showCreator(out, url, data) {
     draw();
     return true;
   };
+  if ($('#refetch')) $('#refetch').onclick = () => $('#go').click();
   $('#picks').onclick = (e) => {
     const p = e.target.closest('.pick');
     if (!p || p.classList.contains('added')) return;

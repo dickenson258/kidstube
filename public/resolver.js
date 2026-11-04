@@ -346,7 +346,7 @@ async function biliCreator(u, { cursor }) {
   const pn = c.pn || 1, ps = 30;
   const base = { referer: `https://space.bilibili.com/${mid}/video`, origin: 'https://space.bilibili.com' };
   const tries = [];
-  let list = null, total = 0, author = '', next = null;
+  let list = null, total = 0, author = '', next = null, source = '';
 
   const arcSearch = async (headers, webid) => {
     const params = { mid, ps, pn, order: 'pubdate', platform: 'web', web_location: 1550101, dm_img_list: '[]', dm_img_str: 'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ', dm_cover_img_str: 'QU5HTEUgKEFwcGxlLCBBcHBsZSBNMSBQcm8sIE9wZW5HTCA0LjEp', dm_img_inter: '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}' };
@@ -357,6 +357,7 @@ async function biliCreator(u, { cursor }) {
     total = d.data.page.count;
     author = list[0]?.author || '';
     next = pn * ps < total ? { pn: pn + 1, webid } : null;
+    source = 'arc';
   };
 
   if (c.mode !== 'dyn') {
@@ -368,6 +369,13 @@ async function biliCreator(u, { cursor }) {
     } catch (e) {
       if (e.code === 'NEED_HELPER') throw e;
       tries.push('arc:' + errInfo(e));
+    }
+    // 1b) 被风控时等一会儿再试（投稿接口是唯一能拿到完整列表的方式，值得多试几次）
+    for (const wait of [1500, 3000]) {
+      if (list) break;
+      await sleep(wait);
+      try { await arcSearch(base, webid); }
+      catch (e) { tries.push(`arc(retry ${wait / 1000}s):` + errInfo(e)); }
     }
     // 2) 附带新申请的设备 Cookie 重试
     if (!list) {
@@ -385,6 +393,7 @@ async function biliCreator(u, { cursor }) {
         list = d.data.archives || [];
         total = d.data.page?.total || 0;
         next = pn * ps < total ? { pn: pn + 1, webid } : null;
+        source = 'series';
         if (!list.length && pn === 1) throw fail('BILI_API', 'empty');
       } catch (e) { list = null; tries.push('series:' + errInfo(e)); }
     }
@@ -399,6 +408,7 @@ async function biliCreator(u, { cursor }) {
       list = items.map((it) => it.modules?.module_dynamic?.major?.archive).filter(Boolean)
         .map((a) => ({ bvid: a.bvid, title: a.title, pic: a.cover, length: a.duration_text }));
       next = d.data.has_more ? { mode: 'dyn', off: d.data.offset } : null;
+      source = 'dynamic';
     } catch (e) { tries.push('dynamic:' + errInfo(e)); }
   }
   if (!list) throw fail('BILI_RISK', tries.join(' | '));
@@ -407,7 +417,8 @@ async function biliCreator(u, { cursor }) {
     try { author = (await getJson(`https://api.bilibili.com/x/web-interface/card?mid=${mid}`, { headers: BILI_REF })).data?.card?.name || ''; } catch {}
   }
   const videos = list.map((v) => ({ ...biliVideo(v), author: author || v.author || '', authorUrl: `https://space.bilibili.com/${mid}` }));
-  return { author: author || 'UP ' + mid, total: total || undefined, videos, next: next ? encCursor(next) : null };
+  // source 不是 arc 时说明被 B 站限制、改用了备用接口，列表可能不完整
+  return { author: author || 'UP ' + mid, total: total || undefined, videos, next: next ? encCursor(next) : null, source, partial: source !== 'arc', tries };
 }
 
 // ---------------------------------------------------------------- 小红书
