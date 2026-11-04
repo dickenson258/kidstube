@@ -15,7 +15,7 @@ KidsTube is just the static files in the `public/` folder:
 
 ## KidsTube Helper (userscript)
 
-Browser cross-origin restrictions (CORS) stop a web page from reading data from sites such as Bilibili and Xiaohongshu. The **KidsTube Helper** ([`public/kidstube-helper.user.js`](public/kidstube-helper.user.js)) is a userscript. With it installed, cross-origin requests go out through your userscript manager and use your own sign-ins in that browser. You don't need to copy cookies, and no server is involved.
+Browser cross-origin restrictions (CORS) stop a web page from reading data from sites such as Bilibili. The **KidsTube Helper** ([`public/kidstube-helper.user.js`](public/kidstube-helper.user.js)) is a userscript. With it installed, cross-origin requests go out through your userscript manager and use your own sign-ins in that browser. You don't need to copy cookies, and no server is involved.
 
 | Device | Browser | Userscript manager |
 | --- | --- | --- |
@@ -39,9 +39,8 @@ Security design:
 | Single video from Douyin / Tencent Video / Youku / Xigua / TikTok / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
 | Vimeo, direct mp4 / m3u8 links | ✅ | ✅ |
 | YouTube channel / playlist import | ✅ requires a YouTube Data API key | ✅ no key needed |
-| Bilibili creator / Xiaohongshu creator import | ❌ | ✅ (Xiaohongshu: first ~30 notes only) |
-| Short links (b23.tv, xhslink, v.douyin…) | ❌ open the link and paste the full address | ✅ expanded automatically |
-| Xiaohongshu videos | ❌ | ✅ the helper downloads the video and plays it in-app |
+| Bilibili creator import | ❌ | ✅ |
+| Short links (b23.tv, v.douyin…) | ❌ open the link and paste the full address | ✅ expanded automatically |
 | Paid Bilibili series (番剧), iQIYI, Mango TV | Opens a window from the original site | Same |
 
 Playback never needs the helper. Embedded YouTube and Bilibili players are loaded by the browser directly.
@@ -50,15 +49,16 @@ Playback never needs the helper. Embedded YouTube and Bilibili players are loade
 
 - **Kids mode:** shows only videos in the library, with group chips and search. The parent area is protected by a 4-digit PIN.
 - **Collections:** a Bilibili video that belongs to a collection (合集) or has multiple parts (分P) offers "Add whole collection" — no helper needed. Bilibili collection links (`space.bilibili.com/<mid>/lists/<sid>`) and YouTube playlists (`list=`) are supported too. On the kids' home page a collection shows as one card that opens its episode list.
-- **Next episode:** the player always has a "Next episode" button for collections. YouTube, Xiaohongshu and direct video links count down 5 seconds and play the next episode (can be cancelled; can be turned off in Settings). The Bilibili player doesn't report when a video ends, so a "Next episode" prompt appears near the estimated end instead.
+- **Next episode:** the player always has a "Next episode" button for collections. YouTube and direct video links count down 5 seconds and play the next episode (can be cancelled; can be turned off in Settings). The Bilibili player doesn't report when a video ends, so a "Next episode" prompt appears near the estimated end instead.
 - **Creator folders:** inside each category, videos are automatically grouped into second-level folders by creator (on both the kids' home page and the parent library).
 - **More from this creator:** any video in the library (or a lookup result) can open its creator's page so you can pick more videos to add.
-- **Paste share text:** when the pasted text has extra words around the link (e.g. Bilibili/Xiaohongshu/Douyin "share" text), the link is extracted automatically and the title is pre-filled.
+- **Paste share text:** when the pasted text has extra words around the link (e.g. Bilibili/Douyin "share" text), the link is extracted automatically and the title is pre-filled.
 - **Stay-in-app lock:** invisible covers over player logos and titles; YouTube recommendations are covered when a video is paused or ends; optional strict sandbox.
 - **Daily watch-time limit:** a parent can add 15 more minutes with the PIN.
 - **Memberships / ad-free viewing:** sign in to each site in the same browser. YouTube Premium needs "Use my signed-in account" turned on.
   - Embedded players need third-party cookies allowed. On iPhone this means turning off "Prevent cross-site tracking" in Safari.
-- **Xiaohongshu on phones:** the mobile site often only offers "Open app". Switch the browser to the desktop site to sign in. If that still fails, copy the `Cookie` request header from a signed-in computer browser and paste it under 🔒 → Accounts → Xiaohongshu (helper 1.3.0+). The helper keeps it in the userscript manager's storage and attaches it only to its own xiaohongshu.com requests; the page can't read it.
+- **Sign-in status:** with the helper installed, 🔒 → Accounts shows whether this browser is signed in to Bilibili and YouTube (and the Bilibili nickname). It re-checks when you come back from the sign-in page.
+- **Xiaohongshu:** no longer supported, because its website doesn't play content. Xiaohongshu links show an error.
 - **Phones:** responsive layout, add to home screen, and in-page fullscreen fallback on iPhone.
 - **Backup / transfer:** export and import the list as JSON. Since data is stored per browser, this is how you move a list to a child's tablet.
 

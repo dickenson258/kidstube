@@ -263,9 +263,7 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .next-hint { position: absolute; left: 12px; right: 12px; bottom: 56px; z-index: 6; display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,.78); color: #fff; border-radius: 14px; padding: 8px 10px; font-size: 14px; }
 .next-hint span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 小红书：从电脑复制登录信息 */
-.xhs-cookie { margin-top: 12px; font-size: 14px; }
-.xhs-cookie summary { cursor: pointer; font-weight: 600; }
-.xhs-cookie[open] summary { margin-bottom: 8px; }
-.xhs-cookie textarea { width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: 12px; }
-.login-item:has(.xhs-cookie[open]) { grid-column: 1 / -1; }
+.login-state { font-size: 13px; font-weight: 600; margin: 0 0 10px; }
+.login-state.on { color: #1a9b4b; }
+.login-state.off { color: #d9534f; }
+.login-state.muted { color: var(--muted); font-weight: 400; }

@@ -564,6 +564,8 @@ export async function resolve({ url, cursor, ytKey }) {
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   let u;
   try { u = new URL(url); } catch { throw fail('BAD_URL'); }
+  // 小红书网页版不能看内容，已不再支持
+  if (/(^|\.)(xiaohongshu\.com|xhslink\.com|xhslink\.cn)$/i.test(u.hostname)) throw fail('XHS_UNSUPPORTED');
   if (SHORT_HOSTS.test(u.hostname)) {
     if (!transport) throw fail('SHORT_LINK');
     u = new URL((await request(u.href)).url || u.href);
@@ -600,10 +602,6 @@ export async function resolve({ url, cursor, ytKey }) {
       return { kind: 'creator', ...(await biliCreator(new URL(`https://space.bilibili.com/${mid}`), { cursor })) };
     }
     return single(u, () => biliSingle(u), { jsonpOk: true });
-  }
-  if (/xiaohongshu\.com$/.test(h)) {
-    if (/\/user\/profile\//.test(u.pathname)) return withHelper(() => xhsCreator(u), 'creator');
-    return withHelper(async () => ({ video: await xhsSingle(u) }), 'video');
   }
   return single(u, () => otherSingle(u));
 }
