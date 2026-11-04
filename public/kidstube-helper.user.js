@@ -1,9 +1,12 @@
 // ==UserScript==
 // @name         KidsTube 助手 / KidsTube Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.0.0
+// @version      1.1.0
 // @description  让 KidsTube 网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets KidsTube look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
+// @homepageURL  https://github.com/dickenson258/kidstube
+// @updateURL    https://dickenson258.github.io/kidstube/kidstube-helper.user.js
+// @downloadURL  https://dickenson258.github.io/kidstube/kidstube-helper.user.js
 // @noframes
 // @run-at       document-end
 // @grant        GM_xmlhttpRequest
@@ -44,7 +47,7 @@
   'use strict';
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
@@ -78,11 +81,17 @@
   }
 
   function send(d) {
+    // 网页不能直接设置 Cookie 请求头；交给脚本管理器的 cookie 选项（会合并进浏览器已有的 Cookie）
+    const headers = { ...(d.headers || {}) };
+    const cookie = headers.cookie || headers.Cookie;
+    delete headers.cookie;
+    delete headers.Cookie;
     return new Promise((resolve, reject) => {
       const req = xhr({
         method: d.method || 'GET',
         url: d.url,
-        headers: d.headers || {},
+        headers,
+        ...(cookie ? { cookie } : {}),
         data: d.body,
         responseType: d.type === 'arraybuffer' ? 'arraybuffer' : undefined,
         anonymous: false,

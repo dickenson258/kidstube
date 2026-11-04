@@ -35,6 +35,21 @@ async function getJson(url, opts) {
   const { text } = await getText(url, opts);
   try { return JSON.parse(text); } catch { throw fail('HTTP', 'invalid JSON ' + new URL(url).host); }
 }
+// JSONP：用 <script> 加载数据，不受跨域限制。B 站 view 接口支持它（UP 主列表接口不支持）
+function jsonp(url, timeout = 10000) {
+  if (typeof document === 'undefined') return Promise.reject(fail('NEED_HELPER'));
+  return new Promise((resolve, reject) => {
+    const cb = '__kt_jsonp_' + Math.random().toString(36).slice(2);
+    const s = document.createElement('script');
+    const done = () => { clearTimeout(timer); delete window[cb]; s.remove(); };
+    const timer = setTimeout(() => { done(); reject(fail('HTTP', 'timeout ' + new URL(url).host)); }, timeout);
+    window[cb] = (d) => { done(); resolve(d); };
+    s.onerror = () => { done(); reject(fail('HTTP', 'jsonp ' + new URL(url).host)); };
+    s.src = url + (url.includes('?') ? '&' : '?') + 'jsonp=jsonp&callback=' + cb;
+    document.head.appendChild(s);
+  });
+}
+
 export async function download(url, headers = {}) {
   const r = await request(url, { headers, type: 'arraybuffer' });
   if (r.status >= 400) throw fail('HTTP', `${r.status} ${new URL(url).host}`);
@@ -86,6 +101,32 @@ function md5(str) {
     a0 = (a0 + A) >>> 0; b0 = (b0 + B) >>> 0; c0 = (c0 + C) >>> 0; d0 = (d0 + D) >>> 0;
   }
   return [a0, b0, c0, d0].map((v) => [0, 8, 16, 24].map((s) => ((v >>> s) & 255).toString(16).padStart(2, '0')).join('')).join('');
+}
+
+// ---------------------------------------------------------------- 从分享文案中提取链接和标题
+// 例：「【小猪佩奇 第1集-哔哩哔哩】 https://b23.tv/abc」「佩奇去露营 http://xhslink.com/a/xyz 复制本条信息…」
+const URL_TAIL = `[^\\s"'<>，。！？；、）】」』《》\u3000]+`;
+export function extractLink(text = '') {
+  const s = String(text).trim();
+  const m = s.match(new RegExp('https?://' + URL_TAIL, 'i')) ||
+    s.match(new RegExp('(?:^|[^\\w.@/])((?:[a-z0-9-]+\\.)+(?:com|cn|tv|be|io|net)/' + URL_TAIL + ')', 'i'));
+  if (!m) return { url: s, title: '' };
+  const hit = m[1] || m[0];
+  const index = m.index + m[0].indexOf(hit);
+  let url = hit.replace(/[.,;:!?)\]'"]+$/, '');
+  if (!/^https?:/i.test(url)) url = 'https://' + url;
+  // 标题：链接前面的【】内容（B 站分享），否则链接前面的文字（小红书/抖音分享）；抖音的【xx的作品】是作者名，跳过
+  const before = s.slice(0, index);
+  const br = before.match(/【([^】]{2,80})】/);
+  let title = br && !/的作品$/.test(br[1]) ? br[1] : before.replace(/【[^】]*】/g, ' ');
+  title = title
+    .replace(/#\s*/g, '')
+    .replace(/^[\d.\s]*(复制打开抖音[，,]?\s*看看)?/, '')
+    .replace(/[-_—\s|]*(哔哩哔哩|bilibili|小红书|抖音|YouTube)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  return { url, title: /https?:/i.test(title) ? '' : title };
 }
 
 // ---------------------------------------------------------------- 离线识别（不联网，只看链接本身）
@@ -142,7 +183,7 @@ export function parseOffline(raw) {
 async function ytSingle(id) {
   try {
     const o = await getJson(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/watch?v=' + id)}`);
-    return ytVideo(id, o.title, o.author_name);
+    return { ...ytVideo(id, o.title, o.author_name), authorUrl: o.author_url };
   } catch {
     return ytVideo(id);
   }
@@ -245,50 +286,118 @@ function wbiSign(params, key) {
 const biliVideo = (v) => ({
   platform: 'bilibili', playType: 'iframe', vid: v.bvid, url: `https://www.bilibili.com/video/${v.bvid}`,
   title: decodeHtml((v.title || '').replace(/<[^>]+>/g, '')), author: v.author || v.owner?.name || '',
+  authorUrl: v.owner?.mid || v.mid ? `https://space.bilibili.com/${v.owner?.mid || v.mid}` : undefined,
   duration: typeof v.duration === 'number' ? fmtDur(v.duration) : v.length || v.duration || '', thumb: https(v.pic),
 });
 async function biliSingle(u) {
   const off = parseOffline(u.href);
   if (!off) {
     // 番剧/课程等无法外嵌，只能在原网站窗口播放
+    if (!transport) throw fail('NEED_HELPER');
     const { text } = await getText(u.href);
     return { platform: 'bilibili', playType: 'external', vid: u.pathname, url: u.href, title: meta(text, 'og:title') || pick(/<title>([^<]*)/, text) || '', thumb: https(meta(text, 'og:image')), author: '', duration: '' };
   }
   const q = off.vid.startsWith('av') ? 'aid=' + off.vid.slice(2) : 'bvid=' + off.vid;
-  const d = await getJson(`https://api.bilibili.com/x/web-interface/view?${q}`, { headers: BILI_REF });
+  const viewUrl = `https://api.bilibili.com/x/web-interface/view?${q}`;
+  const d = transport ? await getJson(viewUrl, { headers: BILI_REF }) : await jsonp(viewUrl);
   if (d.code !== 0) throw fail('BILI_API', d.message);
   const v = biliVideo(d.data);
   if (off.page) { v.page = off.page; v.title += ` (P${off.page})`; }
   return v;
 }
+// B 站 UP 主投稿列表。B 站风控较严，依次尝试多种方式，并把每一步的结果写进错误信息，方便排查：
+//   1) WBI 签名投稿接口（带 w_webid —— 2024 年起登录状态下需要）
+//   2) 同上，但附带新申请的设备 Cookie（浏览器从未打开过 B 站时没有 buvid3）
+//   3) 合集检索接口
+//   4) 空间动态接口（只含视频动态）
+let biliDeviceCookie = null;
+async function biliDevice() {
+  if (biliDeviceCookie !== null) return biliDeviceCookie;
+  try {
+    const d = await getJson('https://api.bilibili.com/x/frontend/finger/spi', { headers: BILI_REF });
+    biliDeviceCookie = `buvid3=${d.data.b_3}; buvid4=${encodeURIComponent(d.data.b_4)}`;
+  } catch { biliDeviceCookie = ''; }
+  return biliDeviceCookie;
+}
+async function biliWebId(mid, headers) {
+  try {
+    const { text } = await getText(`https://space.bilibili.com/${mid}/video`, { headers });
+    const raw = pick(/<script id="__RENDER_DATA__"[^>]*>([^<]+)<\/script>/, text);
+    return raw ? JSON.parse(decodeURIComponent(raw)).access_id || '' : '';
+  } catch { return ''; }
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const errInfo = (e) => (e.code === 'HTTP' ? e.detail : e.code ? e.code + (e.detail ? ':' + e.detail : '') : e.message);
+
 async function biliCreator(u, { cursor }) {
   const mid = pick(/space\.bilibili\.com\/(\d+)/, u.href) || pick(/\/(\d+)/, u.pathname);
   if (!mid) throw fail('BILI_MID');
-  const headers = { referer: `https://space.bilibili.com/${mid}/video` };
-  const pn = decCursor(cursor)?.pn || 1, ps = 30;
-  let list = [], total = 0, author = '';
-  try {
-    const q = wbiSign({ mid, ps, pn, order: 'pubdate', platform: 'web', web_location: 1550101, dm_img_list: '[]', dm_img_str: 'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ', dm_cover_img_str: 'QU5HTEUgKEFwcGxlLCBBcHBsZSBNMSBQcm8sIE9wZW5HTCA0LjEp' }, await wbiKey());
-    const d = await getJson(`https://api.bilibili.com/x/space/wbi/arc/search?${q}`, { headers });
-    if (d.code !== 0) throw new Error(d.message);
-    list = d.data.list.vlist;
+  const c = decCursor(cursor) || {};
+  const pn = c.pn || 1, ps = 30;
+  const base = { referer: `https://space.bilibili.com/${mid}/video`, origin: 'https://space.bilibili.com' };
+  const tries = [];
+  let list = null, total = 0, author = '', next = null;
+
+  const arcSearch = async (headers, webid) => {
+    const params = { mid, ps, pn, order: 'pubdate', platform: 'web', web_location: 1550101, dm_img_list: '[]', dm_img_str: 'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ', dm_cover_img_str: 'QU5HTEUgKEFwcGxlLCBBcHBsZSBNMSBQcm8sIE9wZW5HTCA0LjEp', dm_img_inter: '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}' };
+    if (webid) params.w_webid = webid;
+    const d = await getJson(`https://api.bilibili.com/x/space/wbi/arc/search?${wbiSign(params, await wbiKey())}`, { headers });
+    if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
+    list = d.data.list.vlist || [];
     total = d.data.page.count;
     author = list[0]?.author || '';
-  } catch (e) {
-    if (e.code === 'NEED_HELPER') throw e;
-    if (e.code === 'HTTP' && /^412/.test(e.detail)) throw fail('BILI_RISK', '412');
-    const d = await getJson(`https://api.bilibili.com/x/series/recArchivesByKeywords?mid=${mid}&keywords=&ps=${ps}&pn=${pn}&orderby=pubdate`, { headers }).catch((err) => {
-      throw err.code === 'HTTP' && /^412/.test(err.detail) ? fail('BILI_RISK', '412') : err;
-    });
-    if (d.code !== 0) throw fail('BILI_RISK', d.message || e.message);
-    list = d.data.archives || [];
-    total = d.data.page?.total || 0;
+    next = pn * ps < total ? { pn: pn + 1, webid } : null;
+  };
+
+  if (c.mode !== 'dyn') {
+    // 1) 浏览器自身的 Cookie（家长已登录 B 站时最可靠）
+    let webid = c.webid;
+    try {
+      if (webid === undefined) webid = await biliWebId(mid, base);
+      await arcSearch(base, webid);
+    } catch (e) {
+      if (e.code === 'NEED_HELPER') throw e;
+      tries.push('arc:' + errInfo(e));
+    }
+    // 2) 附带新申请的设备 Cookie 重试
+    if (!list) {
+      try {
+        await sleep(600);
+        const cookie = await biliDevice();
+        if (cookie) await arcSearch({ ...base, cookie }, webid);
+      } catch (e) { tries.push('arc+buvid:' + errInfo(e)); }
+    }
+    // 3) 合集检索接口
+    if (!list) {
+      try {
+        const d = await getJson(`https://api.bilibili.com/x/series/recArchivesByKeywords?mid=${mid}&keywords=&ps=${ps}&pn=${pn}&orderby=pubdate`, { headers: base });
+        if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
+        list = d.data.archives || [];
+        total = d.data.page?.total || 0;
+        next = pn * ps < total ? { pn: pn + 1, webid } : null;
+        if (!list.length && pn === 1) throw fail('BILI_API', 'empty');
+      } catch (e) { list = null; tries.push('series:' + errInfo(e)); }
+    }
   }
+  // 4) 空间动态接口（翻页用 offset）
+  if (!list && (c.mode === 'dyn' || pn === 1)) {
+    try {
+      const d = await getJson(`https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space?host_mid=${mid}&offset=${c.off || ''}&features=itemOpusStyle`, { headers: base });
+      if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
+      const items = d.data.items || [];
+      author = items[0]?.modules?.module_author?.name || '';
+      list = items.map((it) => it.modules?.module_dynamic?.major?.archive).filter(Boolean)
+        .map((a) => ({ bvid: a.bvid, title: a.title, pic: a.cover, length: a.duration_text }));
+      next = d.data.has_more ? { mode: 'dyn', off: d.data.offset } : null;
+    } catch (e) { tries.push('dynamic:' + errInfo(e)); }
+  }
+  if (!list) throw fail('BILI_RISK', tries.join(' | '));
+
   if (!author) {
     try { author = (await getJson(`https://api.bilibili.com/x/web-interface/card?mid=${mid}`, { headers: BILI_REF })).data?.card?.name || ''; } catch {}
   }
-  const videos = list.map((v) => ({ ...biliVideo(v), author: author || v.author || '' }));
-  return { author: author || 'UP ' + mid, total, videos, next: pn * ps < total ? encCursor({ pn: pn + 1 }) : null };
+  const videos = list.map((v) => ({ ...biliVideo(v), author: author || v.author || '', authorUrl: `https://space.bilibili.com/${mid}` }));
+  return { author: author || 'UP ' + mid, total: total || undefined, videos, next: next ? encCursor(next) : null };
 }
 
 // ---------------------------------------------------------------- 小红书
@@ -310,6 +419,7 @@ async function xhsSingle(u) {
   return {
     platform: 'xiaohongshu', playType: src ? 'xhs' : 'external', vid: note.noteId, url: u.href,
     title: note.title || (note.desc || '').slice(0, 40) || '', author: note.user?.nickname || '',
+    authorUrl: note.user?.userId ? `https://www.xiaohongshu.com/user/profile/${note.user.userId}` : undefined,
     duration: fmtDur(note.video?.capa?.duration), thumb: https(note.imageList?.[0]?.urlDefault || note.imageList?.[0]?.url),
     src, isVideo: note.type === 'video',
   };
@@ -326,6 +436,7 @@ async function xhsCreator(u) {
       platform: 'xiaohongshu', playType: 'xhs', vid: n.id,
       url: `https://www.xiaohongshu.com/explore/${n.id}?xsec_token=${encodeURIComponent(n.xsecToken || '')}&xsec_source=pc_user`,
       title: n.displayTitle || '', author: n.user?.nickname || n.user?.nickName || author, duration: '', thumb: https(n.cover?.urlDefault || n.cover?.url),
+      authorUrl: u.origin + u.pathname,
     }));
   return { author, videos, next: null, noteCode: 'XHS_FIRST_PAGE' };
 }
@@ -362,12 +473,21 @@ export async function resolve({ url, cursor, ytKey }) {
   if (isYouTube(u.hostname)) {
     const id = ytVideoId(u);
     if (id && !cursor) return { kind: 'video', video: await ytSingle(id) };
-    if (u.searchParams.get('list') || /^\/(@|channel\/|c\/|user\/)/.test(u.pathname)) return { kind: 'creator', ...(await ytCreator(u, { cursor, ytKey })) };
+    if (u.searchParams.get('list') || /^\/(@|channel\/|c\/|user\/)/.test(u.pathname)) {
+      const r = await ytCreator(u, { cursor, ytKey });
+      // 频道主页（非播放列表）：记下博主主页，便于按博主归类、查看更多视频
+      const home = u.searchParams.get('list') ? null : 'https://www.youtube.com' + u.pathname.split('/').slice(0, u.pathname.startsWith('/@') ? 2 : 3).join('/');
+      if (home) r.videos.forEach((v) => (v.authorUrl = v.authorUrl || home));
+      return { kind: 'creator', ...r };
+    }
     throw fail('YT_URL');
   }
   if (/bilibili\.com$/.test(h)) {
-    if (/^space\./.test(u.hostname)) return withHelper(() => biliCreator(u, { cursor }), 'creator');
-    return single(u, () => biliSingle(u));
+    if (/^space\./.test(u.hostname)) {
+      if (!transport) throw fail('NEED_HELPER_BILI');
+      return { kind: 'creator', ...(await biliCreator(u, { cursor })) };
+    }
+    return single(u, () => biliSingle(u), { jsonpOk: true });
   }
   if (/xiaohongshu\.com$/.test(h)) {
     if (/\/user\/profile\//.test(u.pathname)) return withHelper(() => xhsCreator(u), 'creator');
@@ -380,8 +500,11 @@ async function withHelper(fn, kind) {
   return { kind, ...(await fn()) };
 }
 // 单个视频：有助手 → 完整信息；没有 → 从链接识别（标题由家长填写）
-async function single(u, full) {
+async function single(u, full, { jsonpOk = false } = {}) {
   if (transport) return { kind: 'video', video: await full() };
+  if (jsonpOk) {
+    try { return { kind: 'video', video: await full() }; } catch {}
+  }
   const off = parseOffline(u.href);
   if (!off) throw fail('NEED_HELPER');
   if (off.platform === 'vimeo') {
@@ -400,3 +523,16 @@ export async function xhsStream(url) {
   return v.src;
 }
 export const XHS_HEADERS = XHS_REF;
+
+// 根据已加入的视频找到博主主页（旧数据没有 authorUrl 时现查）
+export async function creatorUrlOf(v) {
+  if (v.authorUrl) return v.authorUrl;
+  if (v.platform === 'youtube') return (await ytSingle(v.vid)).authorUrl || null;
+  if (v.platform === 'bilibili' && /^(BV|av)/.test(v.vid)) {
+    try { return (await biliSingle(new URL(v.url))).authorUrl || null; } catch { return null; }
+  }
+  if (v.platform === 'xiaohongshu' && transport) {
+    try { return (await xhsSingle(new URL(v.url))).authorUrl || null; } catch { return null; }
+  }
+  return null;
+}

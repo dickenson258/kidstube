@@ -122,6 +122,7 @@ const ICON = {
   tv: (n) => svg('<rect x="3" y="6" width="18" height="13" rx="3"/><path d="m8 2 4 4 4-4"/><path d="m10.5 10 4 2.5-4 2.5z" fill="currentColor"/>', n),
   moon: (n) => svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>', n),
   star: (n) => svg('<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>', n),
+  folder: (n) => svg('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>', n),
   window: (n) => svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M14 13h4v4"/><path d="m18 13-5 5"/>', n),
 };
 const thumbImg = (v) => (v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '');
@@ -230,7 +231,20 @@ function bindTopbar() {
 }
 
 // ------------------------------------------------------------ 儿童首页
-let homeGroup = ALL, homeQuery = '';
+let homeGroup = ALL, homeCreator = ALL, homeQuery = '';
+// 博主标识：优先用博主主页地址，没有时用"平台+名字"
+const creatorKey = (v) => v.authorUrl || `${v.platform}:${v.author || ''}`;
+function creatorsOf(list) {
+  const map = new Map();
+  for (const v of list) {
+    if (!v.author) continue;
+    const k = creatorKey(v);
+    const c = map.get(k) || { key: k, name: v.author, count: 0 };
+    c.count++;
+    map.set(k, c);
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count);
+}
 function videoCard(v) {
   return `<a class="card" href="#/watch/${v.id}">
     <div class="thumb">${thumbImg(v)}<span class="plat plat-${v.platform}">${esc(platName(v.platform))}</span>${v.duration ? `<span class="dur">${esc(v.duration)}</span>` : ''}</div>
@@ -240,19 +254,24 @@ function renderHome() {
   const groups = db.groups.filter((g) => db.videos.some((v) => v.group === g));
   if (homeGroup !== ALL && !groups.includes(homeGroup)) homeGroup = ALL;
   const q = homeQuery.toLowerCase();
-  const list = db.videos
-    .filter((v) => homeGroup === ALL || v.group === homeGroup)
+  const inGroup = db.videos.filter((v) => homeGroup === ALL || v.group === homeGroup);
+  const creators = creatorsOf(inGroup);
+  if (homeCreator !== ALL && !creators.some((c) => c.key === homeCreator)) homeCreator = ALL;
+  const list = inGroup
+    .filter((v) => homeCreator === ALL || creatorKey(v) === homeCreator)
     .filter((v) => !q || (v.title + v.author).toLowerCase().includes(q));
   app.innerHTML =
     topbar(`<input class="search" id="q" placeholder="${t('search')}" value="${esc(homeQuery)}">`) +
     `<main class="wrap">
       ${db.videos.length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
+      ${creators.length > 1 ? `<div class="chips sub">${[{ key: ALL, name: t('allCreators') }, ...creators].map((c) => `<button class="chip folder ${c.key === homeCreator ? 'on' : ''}" data-c="${esc(c.key)}">${ICON.folder(16)}<span>${esc(c.name)}</span>${c.count ? `<em>${c.count}</em>` : ''}</button>`).join('')}</div>` : ''}
       ${list.length ? `<div class="grid">${list.map(videoCard).join('')}</div>`
         : db.videos.length ? `<div class="empty"><div class="big">${ICON.search(64)}</div><h2>${t('notFound')}</h2></div>`
         : `<div class="empty"><div class="big">${ICON.tv(72)}</div><h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`}
     </main>`;
   bindTopbar();
-  app.querySelectorAll('.chip').forEach((c) => (c.onclick = () => { homeGroup = c.dataset.g; renderHome(); }));
+  app.querySelectorAll('.chip[data-g]').forEach((c) => (c.onclick = () => { homeGroup = c.dataset.g; homeCreator = ALL; renderHome(); }));
+  app.querySelectorAll('.chip[data-c]').forEach((c) => (c.onclick = () => { homeCreator = c.dataset.c; renderHome(); }));
   const input = $('#q');
   input.oninput = () => {
     homeQuery = input.value;
@@ -391,7 +410,8 @@ function renderWatch(id) {
   if (!v) { location.hash = '#/'; return; }
   if (usage().sec >= limitSec()) return renderRest();
   document.title = v.title + ' · KidsTube';
-  const more = db.videos.filter((x) => x.id !== v.id && x.group === v.group).concat(db.videos.filter((x) => x.group !== v.group)).slice(0, 12);
+  const rank = (x) => (creatorKey(x) === creatorKey(v) ? 0 : x.group === v.group ? 1 : 2);
+  const more = db.videos.filter((x) => x.id !== v.id).sort((a, b) => rank(a) - rank(b)).slice(0, 12);
   app.innerHTML =
     topbar() +
     `<main class="wrap watch">
@@ -475,7 +495,22 @@ function addVideos(list, group) {
   return n;
 }
 
-let lastGroup = null;
+let lastGroup = null, pendingCreatorUrl = null, sharedTitle = '';
+// 从视频库/添加结果跳转："查看该博主的更多视频"
+async function openCreatorOf(v, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = t('loadingMore'); }
+  let url = null;
+  try { url = await R.creatorUrlOf(v); } catch {}
+  if (btn) { btn.disabled = false; btn.textContent = t('moreFromCreator'); }
+  if (!url) return toast(t('noCreatorUrl'));
+  if (!v.authorUrl) {
+    const stored = db.videos.find((x) => x.id === v.id);
+    if (stored) { stored.authorUrl = url; save(); }
+  }
+  pendingCreatorUrl = url;
+  if (location.hash === '#/parent/add') renderParent('add');
+  else location.hash = '#/parent/add';
+}
 function paneAdd(el) {
   el.innerHTML = `<div class="panel">
     <h2>${t('addTitle')}</h2>
@@ -489,24 +524,41 @@ function paneAdd(el) {
     const tip = $('#helper-tip');
     if (tip && !v) tip.innerHTML = `<p class="warn" style="margin-top:14px">${t('helperMissingTip')} <a href="#/parent/accounts">${t('helperSetup')}</a></p>`;
   });
+  const input = $('#url');
+  // 粘贴的分享文案前后常带有文字：自动提取其中的网址，并记下文案里的标题
+  const tidy = () => {
+    const raw = input.value.trim();
+    const { url, title } = R.extractLink(raw);
+    if (url !== raw) { input.value = url; sharedTitle = title; }
+    return url;
+  };
+  input.addEventListener('paste', () => setTimeout(tidy, 0));
   const go = async () => {
-    const url = $('#url').value.trim();
+    const url = tidy();
     if (!url) return;
     const out = $('#result');
     out.innerHTML = `<div class="row" style="margin-top:20px"><div class="spin dark"></div>${t('parsing')}</div>`;
     try {
       const data = await api({ url });
-      if (data.kind === 'video') showSingle(out, data.video, data.manual);
+      if (data.kind === 'video') showSingle(out, data.video, data.manual && !sharedTitle, sharedTitle);
       else showCreator(out, url, data);
     } catch (e) {
       out.innerHTML = `<p class="warn" style="margin-top:16px">${t('parseFail')}${esc(errText(e))}</p>`;
     }
   };
   $('#go').onclick = go;
-  $('#url').onkeydown = (e) => e.key === 'Enter' && go();
+  // 注意：onkeydown 处理函数返回 false 会取消按键（导致无法删除文字），所以不能写成 `cond && go()`
+  input.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  input.oninput = () => { if (!input.value) sharedTitle = ''; };
+  if (pendingCreatorUrl) {
+    input.value = pendingCreatorUrl;
+    pendingCreatorUrl = null;
+    sharedTitle = '';
+    go();
+  }
 }
 
-function showSingle(out, v, manual) {
+function showSingle(out, v, manual, suggested = '') {
   const warn = v.playType === 'external' ? `<p class="warn">${t('extWarn')}</p>`
     : v.platform === 'xiaohongshu' && v.isVideo === false ? `<p class="warn">${t('notVideoNote')}</p>` : '';
   const has = exists(v);
@@ -515,8 +567,10 @@ function showSingle(out, v, manual) {
       <div class="grow"><div style="font-weight:700;font-size:17px">${esc(v.title || platName(v.platform) + ' · ' + v.vid)}</div>
       <div class="hint">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.duration ? ' · ' + esc(v.duration) : ''}</div>
       ${warn}${manual ? `<p class="hint">${t('manualHint')}</p>` : ''}
-      <input class="field" id="title" value="${esc(v.title)}" placeholder="${t('titlePlaceholder')}" style="margin-bottom:10px" title="${t('editTitle')}">
-      <button class="btn primary" id="add" ${has ? 'disabled' : ''}>${has ? t('inLib') : t('addToLib')}</button></div></div>`;
+      <input class="field" id="title" value="${esc(v.title || suggested)}" placeholder="${t('titlePlaceholder')}" style="margin-bottom:10px" title="${t('editTitle')}">
+      <div class="row"><button class="btn primary" id="add" ${has ? 'disabled' : ''}>${has ? t('inLib') : t('addToLib')}</button>
+        ${canHaveCreator(v) ? `<button class="btn" id="more-creator">${t('moreFromCreator')}</button>` : ''}</div></div></div>`;
+  if ($('#more-creator')) $('#more-creator').onclick = (e) => openCreatorOf(v, e.currentTarget);
   if (manual) $('#title').focus();
   $('#add').onclick = () => {
     const title = $('#title').value.trim() || v.title;
@@ -527,8 +581,10 @@ function showSingle(out, v, manual) {
     $('#add').disabled = true;
     $('#add').textContent = t('inLib');
     $('#url').value = '';
+    sharedTitle = '';
   };
 }
+const canHaveCreator = (v) => !!v.authorUrl || v.platform === 'youtube' || (v.platform === 'bilibili' && /^(BV|av)/.test(v.vid)) || v.platform === 'xiaohongshu';
 
 function showCreator(out, url, data) {
   const items = [...data.videos];
@@ -598,23 +654,39 @@ function showCreator(out, url, data) {
   draw();
 }
 
+let libGroup = ALL, libCreator = ALL;
 function paneLibrary(el) {
   let q = '';
+  const drawCreators = () => {
+    const cs = creatorsOf(db.videos.filter((v) => libGroup === ALL || v.group === libGroup));
+    if (libCreator !== ALL && !cs.some((c) => c.key === libCreator)) libCreator = ALL;
+    $('#lc').innerHTML = `<option value="${ALL}">${t('allCreators')}</option>` + cs.map((c) => `<option value="${esc(c.key)}" ${c.key === libCreator ? 'selected' : ''}>${esc(c.name)} (${c.count})</option>`).join('');
+  };
   const draw = () => {
-    const list = db.videos.filter((v) => !q || (v.title + v.author + v.group).toLowerCase().includes(q));
+    const list = db.videos
+      .filter((v) => libGroup === ALL || v.group === libGroup)
+      .filter((v) => libCreator === ALL || creatorKey(v) === libCreator)
+      .filter((v) => !q || (v.title + v.author + v.group).toLowerCase().includes(q));
     $('#libbody').innerHTML = list.map((v) => `<tr data-id="${v.id}">
       <td style="width:120px">${v.thumb ? `<img src="${esc(v.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt="">` : ''}</td>
       <td><div class="t" contenteditable="true" data-f="title" title="${t('editTitle')}">${esc(v.title)}</div>
         <div class="s">${esc(v.author || '')} · ${esc(platName(v.platform))} · <a href="${esc(v.url)}" target="_blank" rel="noopener">${t('original')}</a></div></td>
       <td><select data-f="group">${db.groups.map((g) => `<option ${g === v.group ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td>
-      <td><button class="btn danger small" data-del>${t('del')}</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">${t('noVideos')}</td></tr>`;
+      <td class="acts">${canHaveCreator(v) ? `<button class="btn small" data-more>${t('moreFromCreator')}</button>` : ''}<button class="btn danger small" data-del>${t('del')}</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">${t('noVideos')}</td></tr>`;
   };
   el.innerHTML = `<div class="panel"><h2>${t('libTitle')} <span class="badge">${t('libCount', db.videos.length)}</span></h2>
     <p class="hint">${t('libHint')}</p>
-    <div class="row" style="margin-bottom:10px"><input class="field grow" id="lq" placeholder="${t('libSearch')}">
+    <div class="row" style="margin-bottom:10px">
+      <select class="field" id="lg" style="width:auto"><option value="${ALL}">${t('allGroups')}</option>${db.groups.map((g) => `<option ${g === libGroup ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>
+      <select class="field" id="lc" style="width:auto"></select>
+      <input class="field grow" id="lq" placeholder="${t('libSearch')}">
       <button class="btn small" id="newg">${t('manageGroups')}</button><button class="btn danger small" id="delall">${t('clearAll')}</button></div>
     <div class="table-wrap"><table class="lib"><tbody id="libbody"></tbody></table></div></div>`;
+  if (libGroup !== ALL && !db.groups.includes(libGroup)) libGroup = ALL;
+  drawCreators();
   draw();
+  $('#lg').onchange = (e) => { libGroup = e.target.value; libCreator = ALL; drawCreators(); draw(); };
+  $('#lc').onchange = (e) => { libCreator = e.target.value; draw(); };
   const byRow = (e) => db.videos.find((x) => x.id === e.target.closest('tr')?.dataset.id);
   $('#lq').oninput = (e) => { q = e.target.value.trim().toLowerCase(); draw(); };
   $('#libbody').addEventListener('change', (e) => {
@@ -630,6 +702,7 @@ function paneLibrary(el) {
     if (title && title !== v.title) { v.title = title; save(); toast(t('titleUpdated')); }
   });
   $('#libbody').addEventListener('click', (e) => {
+    if (e.target.matches('[data-more]')) return openCreatorOf(byRow(e), e.target);
     if (!e.target.matches('[data-del]')) return;
     const id = e.target.closest('tr').dataset.id;
     db.videos = db.videos.filter((x) => x.id !== id);

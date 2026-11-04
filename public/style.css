@@ -223,3 +223,11 @@ body.no-scroll { overflow: hidden; }
 /* iOS：取消双击缩放的判定，快速连续点击（如输入密码）不会丢失 */
 html, body, button, a, .card, .pick, .chip { touch-action: manipulation; }
 button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
+
+/* 二级分类：按博主归类 */
+.chips.sub { padding-top: 0; margin-top: -4px; }
+.chip.folder { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; padding: 8px 14px; font-weight: 600; }
+.chip.folder em { font-style: normal; font-size: 12px; opacity: .65; }
+.chip.folder .ico { opacity: .8; }
+.lib td.acts { white-space: nowrap; text-align: right; }
+.lib td.acts .btn { margin-left: 4px; }
