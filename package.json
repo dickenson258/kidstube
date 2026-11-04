@@ -1,0 +1,13 @@
+{
+  "name": "kidstube",
+  "version": "2.0.0",
+  "description": "KidsTube - 家长自选视频白名单的儿童视频站。纯静态网站，数据只存本地浏览器",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

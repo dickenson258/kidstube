@@ -1,0 +1,69 @@
+# KidsTube
+
+A kids' video site where parents choose exactly which videos their children can watch.
+
+- **Pure static website, no server.** Link resolving runs in the browser.
+- **Data stays local.** Video lists and settings are stored only in the browser (localStorage) and are never uploaded.
+- **Chinese / English.** Switch from the top bar or in Settings.
+
+## Running and deploying
+
+KidsTube is just the static files in the `public/` folder:
+
+- **Local preview:** `npm start` (Node 18+, no dependencies), then open <http://localhost:5173>. Devices on the same Wi-Fi can use the LAN address it prints.
+- **Deployment:** upload `public/` to any static host, such as GitHub Pages, Cloudflare Pages, Vercel, or Nginx. Subdirectory deployment is supported. HTTPS is recommended.
+
+## KidsTube Helper (userscript)
+
+Browser cross-origin restrictions (CORS) stop a web page from reading data from sites such as Bilibili and Xiaohongshu. The **KidsTube Helper** ([`public/kidstube-helper.user.js`](public/kidstube-helper.user.js)) is a userscript. With it installed, cross-origin requests go out through your userscript manager and use your own sign-ins in that browser. You don't need to copy cookies, and no server is involved.
+
+| Device | Browser | Userscript manager |
+| --- | --- | --- |
+| Computer | Chrome / Edge / Firefox / Safari | Tampermonkey |
+| Android | Firefox or Edge (Chrome for Android doesn't support extensions) | Tampermonkey |
+| iPhone / iPad | Safari | Userscripts app (free, open source) |
+
+Installation steps are in KidsTube under 🔒 → Accounts.
+
+Security design:
+- The helper only runs on pages that contain `<meta name="kidstube-app">`.
+- It only contacts the video sites listed under `@connect`.
+- Each KidsTube address must be allowed by the user in a confirmation dialog the first time.
+
+## What works with and without the helper
+
+| Feature | Without helper | With helper |
+| --- | --- | --- |
+| Single YouTube video | ✅ title and thumbnail read automatically | ✅ |
+| Single video from Bilibili / Douyin / Tencent Video / Youku / Xigua / TikTok / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
+| Vimeo, direct mp4 / m3u8 links | ✅ | ✅ |
+| YouTube channel / playlist import | ✅ requires a YouTube Data API key | ✅ no key needed |
+| Bilibili creator / Xiaohongshu creator import | ❌ | ✅ (Xiaohongshu: first ~30 notes only) |
+| Short links (b23.tv, xhslink, v.douyin…) | ❌ open the link and paste the full address | ✅ expanded automatically |
+| Xiaohongshu videos | ❌ | ✅ the helper downloads the video and plays it in-app |
+| Paid Bilibili series (番剧), iQIYI, Mango TV | Opens a window from the original site | Same |
+
+Playback never needs the helper. Embedded YouTube and Bilibili players are loaded by the browser directly.
+
+## Other features
+
+- **Kids mode:** shows only videos in the library, with group chips and search. The parent area is protected by a 4-digit PIN.
+- **Stay-in-app lock:** invisible covers over player logos and titles; YouTube recommendations are covered when a video is paused or ends; optional strict sandbox.
+- **Daily watch-time limit:** a parent can add 15 more minutes with the PIN.
+- **Memberships / ad-free viewing:** sign in to each site in the same browser. YouTube Premium needs "Use my signed-in account" turned on.
+  - Embedded players need third-party cookies allowed. On iPhone this means turning off "Prevent cross-site tracking" in Safari.
+- **Phones:** responsive layout, add to home screen, and in-page fullscreen fallback on iPhone.
+- **Backup / transfer:** export and import the list as JSON. Since data is stored per browser, this is how you move a list to a child's tablet.
+
+## Files
+
+```
+public/index.html               Entry page
+public/app.js                   Kids mode, player, parent area
+public/resolver.js              In-browser link resolver (also runs in Node for testing)
+public/bridge.js                postMessage bridge between the page and the helper
+public/kidstube-helper.user.js  KidsTube Helper userscript
+public/i18n.js                  Chinese / English strings
+public/style.css                Styles
+server.js                       Optional local preview server (static files only)
+```
