@@ -231,3 +231,5 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .chip.folder .ico { opacity: .8; }
 .lib td.acts { white-space: nowrap; text-align: right; }
 .lib td.acts .btn { margin-left: 4px; }
+
+.testout { background: var(--bg); border: 2px solid var(--line); border-radius: 12px; padding: 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-top: 10px; }

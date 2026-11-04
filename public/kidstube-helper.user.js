@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KidsTube 助手 / KidsTube Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.1.0
+// @version      1.2.0
 // @description  让 KidsTube 网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets KidsTube look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
@@ -47,7 +47,7 @@
   'use strict';
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
@@ -104,6 +104,10 @@
     });
   }
 
+  // 无论脚本管理器是否遵守 timeout，都保证在限定时间内给网页一个答复（并说明卡在哪一步）
+  const within = (p, ms, label) =>
+    Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))]);
+
   window.addEventListener('message', async (e) => {
     if (e.source !== window || !e.data || typeof e.data !== 'object') return;
     const d = e.data;
@@ -114,8 +118,14 @@
       const u = new URL(d.url);
       if (!/^https?:$/.test(u.protocol) || !ALLOWED.test(u.hostname)) return reply({ code: 'HELPER_HOST', error: u.hostname });
       if (!['GET', 'POST'].includes((d.method || 'GET').toUpperCase())) return reply({ code: 'HELPER_HOST', error: d.method });
-      if (!(await ensureApproved())) return reply({ code: 'HELPER_DENIED', error: 'denied' });
-      const r = await send(d);
+      const where = u.host + u.pathname;
+      let ok;
+      try { ok = await within(ensureApproved(), 60000, 'approval'); }
+      catch { return reply({ code: 'HELPER_APPROVAL', error: where }); }
+      if (!ok) return reply({ code: 'HELPER_DENIED', error: 'denied' });
+      let r;
+      try { r = await within(send(d), d.type === 'arraybuffer' ? 300000 : 25000, 'timeout'); }
+      catch (err) { return reply({ code: 'HELPER_NET', error: `${(err && err.message) || err} @ ${where}` }); }
       if (d.type === 'arraybuffer') {
         const buf = r.response instanceof ArrayBuffer ? r.response : null;
         if (!buf) return reply({ code: 'HELPER_NET', error: 'empty response' });

@@ -40,9 +40,12 @@ export function helperRequest({ url, method = 'GET', headers = {}, body, type = 
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
     // 下载视频时间较长；首次使用还要等家长在弹窗中确认
+    let where = url;
+    try { const u = new URL(url); where = u.host + u.pathname; } catch {}
+    // 助手 1.2.0 起自带超时（授权 60 秒 + 请求 25 秒），这里只是兜底
     const timer = setTimeout(() => {
-      if (pending.delete(id)) reject(Object.assign(new Error('HELPER_TIMEOUT'), { code: 'HELPER_TIMEOUT' }));
-    }, type === 'arraybuffer' ? 300000 : 90000);
+      if (pending.delete(id)) reject(Object.assign(new Error('HELPER_TIMEOUT'), { code: 'HELPER_TIMEOUT', detail: where }));
+    }, type === 'arraybuffer' ? 320000 : 100000);
     pending.set(id, { resolve, reject, timer });
     window.postMessage({ __kt: 'req', id, url, method, headers, body, type }, location.origin);
   });

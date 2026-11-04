@@ -738,7 +738,11 @@ function paneAccounts(el) {
     <div class="row" style="margin-bottom:12px"><a class="btn primary" href="kidstube-helper.user.js" target="_blank" rel="noopener">${t('helperInstall')}</a>
       <button class="btn small" id="recheck">${t('helperRecheck')}</button></div>
     <div class="steps">${t('helperSteps')}</div>
-    <p class="hint">${t('helperPrivacy')}</p></div>
+    <p class="hint">${t('helperPrivacy')}</p>
+    <h3>${t('helperTest')}</h3>
+    <p class="hint">${t('helperTestHint')}</p>
+    <div class="row"><button class="btn" id="selftest">${t('helperTest')}</button><button class="btn small" id="copytest" hidden>${t('helperTestCopy')}</button></div>
+    <pre class="testout" id="testout" hidden></pre></div>
 
     <div class="panel"><h2>${t('accTitle')}</h2>
     <p class="hint">${t('accHint')}</p>
@@ -757,12 +761,58 @@ function paneAccounts(el) {
     <div class="row" style="margin-top:14px"><button class="btn primary" id="save">${t('save')}</button></div></div>`;
   el.querySelectorAll('[data-login]').forEach((b) => (b.onclick = () => window.open(b.dataset.login, '_blank', 'popup,width=1000,height=760')));
   $('#recheck').onclick = () => location.reload();
+  $('#selftest').onclick = () => runSelfTest();
+  $('#copytest').onclick = async () => {
+    try { await navigator.clipboard.writeText($('#testout').textContent); toast(t('helperTestCopied')); }
+    catch { toast(t('helperTestCopyFail')); }
+  };
   $('#save').onclick = () => {
     s.ytLoggedIn = $('#ytlogin').checked;
     s.ytKey = $('#ytkey').value.trim();
     save();
     toast(t('saved'));
   };
+}
+
+// 助手自检：逐项测试并显示耗时，结果可复制发给开发者排查
+async function runSelfTest() {
+  const out = $('#testout'), btn = $('#selftest');
+  out.hidden = false;
+  btn.disabled = true;
+  const lines = [`KidsTube ${location.origin}`, `UA: ${navigator.userAgent}`];
+  const show = () => (out.textContent = lines.join('\n'));
+  const step = async (label, fn) => {
+    lines.push(`… ${label}`);
+    show();
+    const t0 = performance.now();
+    let msg;
+    try { msg = '✓ ' + (await fn()); }
+    catch (e) { msg = '✗ ' + (e.code ? e.code + (e.detail ? ' ' + e.detail : '') : e.message); }
+    lines[lines.length - 1] = `${label}: ${msg} (${Math.round(performance.now() - t0)} ms)`;
+    show();
+  };
+  const ver = await detectHelper(2000);
+  lines.push(`${t('helperTitle')}: ${ver ? 'v' + ver : t('helperOff')}`);
+  show();
+  if (ver) {
+    const get = async (url) => {
+      const r = await helperRequest({ url });
+      return { status: r.status, text: typeof r.data === 'string' ? r.data : '' };
+    };
+    await step('Bilibili nav', async () => {
+      const r = await get('https://api.bilibili.com/x/web-interface/nav');
+      const j = JSON.parse(r.text);
+      return `HTTP ${r.status}, ${j.data?.isLogin ? t('helperTestLoggedIn') : t('helperTestLoggedOut')}`;
+    });
+    await step('Bilibili UP', async () => {
+      const r = await R.resolve({ url: 'https://space.bilibili.com/946974' });
+      return `${r.author}: ${r.videos.length} / ${r.total ?? '?'}`;
+    });
+    await step('YouTube oEmbed', async () => `HTTP ${(await get('https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=jNQXAC9IVRw')).status}`);
+    await step('Xiaohongshu', async () => `HTTP ${(await get('https://www.xiaohongshu.com/explore')).status}`);
+  }
+  btn.disabled = false;
+  $('#copytest').hidden = false;
 }
 
 function paneSettings(el) {
