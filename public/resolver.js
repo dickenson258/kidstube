@@ -201,18 +201,32 @@ function ytWalk(node, out, conts) {
   if (node.continuationCommand?.token) conts.push(node.continuationCommand.token);
   for (const k in node) ytWalk(node[k], out, conts);
 }
+// 有的脚本管理器（如 Firefox 上的 Tampermonkey）发 POST 时带上扩展自己的 Origin（moz-extension://…），
+// YouTube 会返回 403。所以显式指定 Origin；如果仍被拒绝，播放列表改为读取网页里自带的 ytInitialData（GET 请求，只有第一页）。
+const YT_HEADERS = { 'content-type': 'application/json', origin: 'https://www.youtube.com', 'x-origin': 'https://www.youtube.com', referer: 'https://www.youtube.com/' };
 async function ytBrowse(payload) {
-  const data = await getJson('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: '2.20251020.01.00', hl: 'zh-CN', gl: 'US' } }, ...payload }),
-  });
+  let data, blocked = false;
+  try {
+    data = await getJson('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+      method: 'POST',
+      headers: YT_HEADERS,
+      body: JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: '2.20251020.01.00', hl: 'zh-CN', gl: 'US' } }, ...payload }),
+    });
+  } catch (e) {
+    if (!(e.code === 'HTTP' && /^40[13]/.test(e.detail || ''))) throw e;
+    if (!payload.browseId?.startsWith('VL')) throw fail('YT_BLOCKED', e.detail);
+    const { text } = await getText(`https://www.youtube.com/playlist?list=${payload.browseId.slice(2)}`);
+    const m = /ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s.exec(text);
+    if (!m) throw fail('YT_BLOCKED', e.detail);
+    data = JSON.parse(m[1]);
+    blocked = true;
+  }
   const out = [], conts = [];
   ytWalk(data, out, conts);
   const seen = new Set();
   const title = data.metadata?.playlistMetadataRenderer?.title || data.header?.playlistHeaderRenderer?.title?.simpleText ||
     data.header?.pageHeaderRenderer?.pageTitle || '';
-  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: conts[conts.length - 1] || null, title };
+  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: blocked ? null : conts[conts.length - 1] || null, title, blocked };
 }
 async function ytChannelInfo(u) {
   let id = pick(/^\/channel\/(UC[\w-]{22})/, u.pathname);
@@ -292,7 +306,7 @@ async function ytCreatorWeb(u, c) {
   if (!r.videos.length && channelId) r = await ytBrowse({ browseId: channelId, params: 'EgZ2aWRlb3PyBgQKAjoA' });
   if (listId) author = r.title || 'Playlist'; // 播放列表：author 字段放列表名，视频各自保留所属频道
   r.videos.forEach((v) => (v.author = listId ? v.author || '' : author));
-  return { author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author, list: !!listId }) : null };
+  return { author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author, list: !!listId }) : null, ...(r.blocked ? { noteCode: 'YT_FIRST_PAGE' } : {}) };
 }
 
 // ---------------------------------------------------------------- 哔哩哔哩
