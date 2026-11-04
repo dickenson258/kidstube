@@ -154,6 +154,8 @@ export const DICT = {
     helperTestCopy: '复制结果',
     helperTestCopied: '已复制',
     helperTestCopyFail: '复制失败，请长按选择文字复制',
+    helperTestRoundTrip: '双向通信',
+    helperTestNoReply: '助手收不到网页的消息（请把助手更新到最新版本）',
     helperTestLoggedIn: '已登录 B 站',
     helperTestLoggedOut: '未登录 B 站',
     platforms: {
@@ -340,6 +342,8 @@ export const DICT = {
     helperTestCopy: 'Copy result',
     helperTestCopied: 'Copied',
     helperTestCopyFail: "Couldn't copy — select the text and copy it manually",
+    helperTestRoundTrip: 'Two-way messaging',
+    helperTestNoReply: "The helper isn't receiving the page's messages (update the helper to the latest version)",
     helperTestLoggedIn: 'signed in to Bilibili',
     helperTestLoggedOut: 'not signed in to Bilibili',
     platforms: {

@@ -2,11 +2,13 @@
 const pending = new Map();
 const waiters = new Set();
 let version = null;
+const nonceWaiters = new Map();
 
 window.addEventListener('message', (e) => {
   if (e.source !== window || !e.data || typeof e.data !== 'object') return;
   const d = e.data;
   if (d.__kt === 'pong') {
+    if (d.nonce && nonceWaiters.has(d.nonce)) { nonceWaiters.get(d.nonce)(d.version); nonceWaiters.delete(d.nonce); }
     version = d.version || '1';
     waiters.forEach((f) => f(version));
     waiters.clear();
@@ -48,5 +50,15 @@ export function helperRequest({ url, method = 'GET', headers = {}, body, type = 
     }, type === 'arraybuffer' ? 320000 : 100000);
     pending.set(id, { resolve, reject, timer });
     window.postMessage({ __kt: 'req', id, url, method, headers, body, type }, location.origin);
+  });
+}
+
+// 双向通信测试：发出带编号的 ping，确认助手确实收到了网页的消息并回复
+export function pingHelper(timeout = 3000) {
+  return new Promise((resolve) => {
+    const nonce = Math.random().toString(36).slice(2);
+    nonceWaiters.set(nonce, (v) => resolve(v || true));
+    window.postMessage({ __kt: 'ping', nonce }, location.origin);
+    setTimeout(() => { if (nonceWaiters.delete(nonce)) resolve(null); }, timeout);
   });
 }

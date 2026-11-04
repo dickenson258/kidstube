@@ -1,7 +1,7 @@
 // KidsTube 前端 —— 所有数据只保存在本浏览器 localStorage，不上传任何服务器
 import { DICT } from './i18n.js';
 import * as R from './resolver.js';
-import { detectHelper, onHelper, helperRequest, helperVersion } from './bridge.js';
+import { detectHelper, onHelper, helperRequest, helperVersion, pingHelper } from './bridge.js';
 
 // 检测到 KidsTube 助手后，跨域请求改由助手发出
 onHelper(() => R.setTransport(helperRequest));
@@ -795,6 +795,11 @@ async function runSelfTest() {
   lines.push(`${t('helperTitle')}: ${ver ? 'v' + ver : t('helperOff')}`);
   show();
   if (ver) {
+    await step(t('helperTestRoundTrip'), async () => {
+      const v = await pingHelper();
+      if (!v) throw Object.assign(new Error(t('helperTestNoReply')), {});
+      return 'OK';
+    });
     const get = async (url) => {
       const r = await helperRequest({ url });
       return { status: r.status, text: typeof r.data === 'string' ? r.data : '' };

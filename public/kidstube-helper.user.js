@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KidsTube 助手 / KidsTube Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.2.0
+// @version      1.2.1
 // @description  让 KidsTube 网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets KidsTube look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
@@ -47,14 +47,18 @@
   'use strict';
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.2.1';
   const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
   const getValue = (k, d) => (typeof GM !== 'undefined' && GM.getValue ? GM.getValue(k, d) : Promise.resolve(GM_getValue(k, d)));
   const setValue = (k, v) => (typeof GM !== 'undefined' && GM.setValue ? GM.setValue(k, v) : Promise.resolve(GM_setValue(k, v)));
   const origin = location.origin;
-  const post = (msg, transfer) => window.postMessage(msg, origin, transfer || []);
+  // 有些管理器（如 Firefox 上的 Tampermonkey）给脚本的 window 是代理对象；带 transfer 发送失败时退回普通复制
+  const post = (msg, transfer) => {
+    try { window.postMessage(msg, origin, transfer || []); }
+    catch { window.postMessage(msg, origin); }
+  };
 
   if (!xhr) {
     console.warn('[KidsTube Helper] 当前脚本管理器不支持 GM.xmlHttpRequest');
@@ -109,9 +113,11 @@
     Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))]);
 
   window.addEventListener('message', async (e) => {
-    if (e.source !== window || !e.data || typeof e.data !== 'object') return;
+    // 不能用 e.source !== window 判断：在 Firefox 等环境里脚本看到的 window 是代理对象，永远不相等，
+    // 会导致收不到网页的任何请求（表现为"助手请求超时"）。改为校验消息来源网址。
+    if (e.origin !== origin || !e.data || typeof e.data !== 'object') return;
     const d = e.data;
-    if (d.__kt === 'ping') return post({ __kt: 'pong', version: VERSION });
+    if (d.__kt === 'ping') return post({ __kt: 'pong', version: VERSION, nonce: d.nonce });
     if (d.__kt !== 'req' || !d.id) return;
     const reply = (o, transfer) => post({ __kt: 'res', id: d.id, ...o }, transfer);
     try {
