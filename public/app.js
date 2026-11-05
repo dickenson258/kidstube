@@ -525,6 +525,14 @@ function renderWatch(id) {
   let watched = 0;
   // iPhone Safari 不支持对普通元素全屏，改用铺满屏幕的"伪全屏"（并提示横屏）
   const exitPseudo = () => { box.classList.remove('pseudo-fs'); document.body.classList.remove('no-scroll'); };
+  // 全屏后锁定横屏（Android 上的 Firefox / Chrome 支持；手机开着"锁定竖屏"时也能横过来）。竖屏视频不锁
+  const onFsChange = () => {
+    const o = screen.orientation;
+    if (!o) return;
+    if (document.fullscreenElement === box) { if (!box.classList.contains('portrait')) o.lock?.('landscape').catch(() => {}); }
+    else if (!document.fullscreenElement) { try { o.unlock?.(); } catch {} }
+  };
+  document.addEventListener('fullscreenchange', onFsChange);
   $('#fs').onclick = () => {
     const req = box.requestFullscreen || box.webkitRequestFullscreen;
     if (req) return Promise.resolve(req.call(box)).catch(() => {});
@@ -557,7 +565,7 @@ function renderWatch(id) {
       renderRest();
     }
   }, 1000);
-  cleanup = () => { clearInterval(timer); clearInterval(countdown); unmount?.(); exitPseudo(); save(); };
+  cleanup = () => { clearInterval(timer); clearInterval(countdown); unmount?.(); exitPseudo(); document.removeEventListener('fullscreenchange', onFsChange); save(); };
 }
 
 // ------------------------------------------------------------ 家长后台
