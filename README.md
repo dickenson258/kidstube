@@ -6,6 +6,8 @@ A kids' video site where parents choose exactly which videos their children can 
 
 English | [中文说明](#中文说明)
 
+![KidsTube on a phone: the kids' home screen, the end-of-video screen with no Up Next, and a Bilibili series in the same list](docs/screens.jpg)
+
 ## Why
 
 Video apps for kids have three problems for parents:
@@ -109,6 +111,8 @@ server.js                       Optional local preview server (static files only
 **在线使用：** <https://dickenson258.github.io/kidstube/> · 免费、开源（MIT）、无需注册
 
 一个由家长挑选视频的儿童视频站：孩子只能看到你加进白名单的视频。
+
+![KidsTube 手机界面：孩子首页、播完没有推荐的结束画面、同一片单里的 B站合集](docs/screens.jpg)
 
 ### 为什么做这个
 
