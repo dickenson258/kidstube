@@ -875,14 +875,15 @@ function paneLibrary(el) {
   };
 }
 
+// 都直接打开各网站的登录页（不是首页）；手机上爱奇艺 / 优酷 / 腾讯视频会自动显示手机号验证码登录
 const LOGINS = [
   { key: 'youtube', url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F', color: '#ff0033' },
   { key: 'bilibili', url: 'https://passport.bilibili.com/login', color: '#fb7299' },
-  { key: 'douyin', url: 'https://www.douyin.com/', color: '#111' },
-  { key: 'qq', url: 'https://v.qq.com/', color: '#ff6a00' },
+  { key: 'douyin', url: 'https://sso.douyin.com/?service=' + encodeURIComponent('https://www.douyin.com/'), color: '#111' },
+  { key: 'qq', url: 'https://film.qq.com/weixin/login.html?ru=' + encodeURIComponent('https://v.qq.com/'), color: '#ff6a00' },
   // 优酷首页在手机上会换成引导打开 App 的手机版；专门的登录页在手机上也能用账号密码 / 验证码登录
   { key: 'youku', url: 'https://account.youku.com/?callback=' + encodeURIComponent('https://www.youku.com/'), color: '#1f8cff' },
-  { key: 'iqiyi', url: 'https://www.iqiyi.com/', color: '#00be06' },
+  { key: 'iqiyi', url: 'https://www.iqiyi.com/iframe/loginreg', color: '#00be06' },
 ];
 // 借助手读取本浏览器在各网站的登录状态（只读是否登录和昵称，不读 Cookie）
 const LOGIN_CHECKS = {
