@@ -880,7 +880,8 @@ const LOGINS = [
   { key: 'bilibili', url: 'https://passport.bilibili.com/login', color: '#fb7299' },
   { key: 'douyin', url: 'https://www.douyin.com/', color: '#111' },
   { key: 'qq', url: 'https://v.qq.com/', color: '#ff6a00' },
-  { key: 'youku', url: 'https://www.youku.com/', color: '#1f8cff' },
+  // 优酷首页在手机上会换成引导打开 App 的手机版；专门的登录页在手机上也能用账号密码 / 验证码登录
+  { key: 'youku', url: 'https://account.youku.com/?callback=' + encodeURIComponent('https://www.youku.com/'), color: '#1f8cff' },
   { key: 'iqiyi', url: 'https://www.iqiyi.com/', color: '#00be06' },
 ];
 // 借助手读取本浏览器在各网站的登录状态（只读是否登录和昵称，不读 Cookie）
@@ -907,7 +908,8 @@ const LOGIN_CHECKS = {
   },
   // 优酷：页面里服务端填入的 userId，未登录时为空（页面约 0.6MB，等待时间放宽）
   youku: async () => {
-    const text = (await helperRequest({ url: 'https://www.youku.com/ku/webvip', timeout: 60000 })).data || '';
+    // 优酷按浏览器标识返回手机版页面（没有 userId），所以用电脑版标识请求
+    const text = (await helperRequest({ url: 'https://www.youku.com/ku/webvip', timeout: 60000, headers: { 'user-agent': DESKTOP_UA } })).data || '';
     const m = /"userId":"([^"]*)"/.exec(text);
     return m ? { in: !!m[1] } : null;
   },
@@ -917,6 +919,7 @@ const LOGIN_CHECKS = {
     return j.code === 'A00000' ? { in: true } : j.code === 'Q00304' ? { in: false } : null;
   },
 };
+const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0';
 let loginCheckAt = 0;
 async function refreshLoginStates() {
   const boxes = [...document.querySelectorAll('[data-state]')];
