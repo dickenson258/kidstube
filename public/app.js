@@ -359,9 +359,10 @@ function mountIframe(box, v, onEnded) {
   // 沙箱（不含 allow-popups / allow-top-navigation）：播放器里指向外网的链接、"在 YouTube 上观看"、推荐卡片等
   // 都无法打开新页面或跳转，点击没有反应。YouTube 在沙箱里能正常播放，所以始终开启；其他网站按设置
   const sandboxed = sandboxOn(v.platform);
+  // 有沙箱时外链本来就打不开，不再加透明遮挡（否则会挡住 YouTube 卡片列表的关闭按钮等正常操作）
   box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation"' : ''}></iframe>
-    ${s.shield ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}`;
+    ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}`;
   if (v.platform === 'youtube') return watchYouTube(box, onEnded);
 }
 
