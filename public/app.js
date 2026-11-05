@@ -20,7 +20,7 @@ function load() {
   const base = {
     videos: [],
     groups: DICT[browserLang].defaultGroups.slice(),
-    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true, biliNative: true },
+    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true, biliNative: true, sandboxSites: { youtube: true } },
     usage: { date: today(), sec: 0, bonus: 0 },
   };
   try {
@@ -346,11 +346,19 @@ const SHIELDS = {
   default: ['top'],
 };
 
+// 每个网站单独设置是否用沙箱；默认只有 YouTube 开启（旧版的"全部开启"选项迁移为每个网站都开）
+const SANDBOX_SITES = ['youtube', 'bilibili', 'douyin', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'dailymotion', 'other'];
+function sandboxOn(platform) {
+  const s = db.settings;
+  if (!s.sandboxSites) s.sandboxSites = s.sandbox ? Object.fromEntries(SANDBOX_SITES.map((p) => [p, true])) : { youtube: true };
+  const key = SANDBOX_SITES.includes(platform) ? platform : 'other';
+  return s.sandboxSites[key] ?? key === 'youtube';
+}
 function mountIframe(box, v, onEnded) {
   const s = db.settings;
   // 沙箱（不含 allow-popups / allow-top-navigation）：播放器里指向外网的链接、"在 YouTube 上观看"、推荐卡片等
   // 都无法打开新页面或跳转，点击没有反应。YouTube 在沙箱里能正常播放，所以始终开启；其他网站按设置
-  const sandboxed = v.platform === 'youtube' || s.sandbox;
+  const sandboxed = sandboxOn(v.platform);
   box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation"' : ''}></iframe>
     ${s.shield ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}`;
@@ -1020,8 +1028,9 @@ function paneSettings(el) {
       <h3>${t('lockTitle')}</h3>
       <label class="inline"><input type="checkbox" id="shield" ${s.shield ? 'checked' : ''}> ${t('shield')}</label>
       <p class="hint">${t('shieldHint')}</p>
-      <label class="inline"><input type="checkbox" id="sandbox" ${s.sandbox ? 'checked' : ''}> ${t('sandbox')}</label>
+      <label>${t('sandbox')}</label>
       <p class="hint">${t('sandboxHint')}</p>
+      <div class="sandbox-list">${SANDBOX_SITES.map((p) => `<label class="inline"><input type="checkbox" data-sandbox="${p}" ${sandboxOn(p) ? 'checked' : ''}> ${esc(platName(p))}</label>`).join('')}</div>
       <button class="btn primary" id="save">${t('save')}</button></div>
     <div class="panel"><h2>${t('pinTitle')}</h2><button class="btn" id="pin">${t('changePin')}</button></div>
     <div class="panel"><h2>${t('backupTitle')}</h2>
@@ -1033,7 +1042,8 @@ function paneSettings(el) {
     s.shield = $('#shield').checked;
     s.autoplayNext = $('#autoplay-next').checked;
     s.biliNative = $('#bili-native').checked;
-    s.sandbox = $('#sandbox').checked;
+    s.sandboxSites = Object.fromEntries([...el.querySelectorAll('[data-sandbox]')].map((c) => [c.dataset.sandbox, c.checked]));
+    delete s.sandbox;
     save();
     toast(t('saved'));
   };

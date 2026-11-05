@@ -285,3 +285,4 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
   .spin { width: 28px; height: 28px; border-width: 3px; }
   .next-hint { bottom: 44px; left: 8px; right: 8px; padding: 6px 8px; font-size: 13px; }
 }
+.sandbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 12px; margin: 4px 0 14px; }
