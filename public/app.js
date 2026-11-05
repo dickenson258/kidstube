@@ -367,7 +367,7 @@ function watchYouTube(box, onEnded) {
   const show = (state) => {
     if (state === 0) {
       if (onEnded?.()) { cover.hidden = true; return; } // 有下一集：交给倒计时
-      cover.innerHTML = `<div class="ended"><div class="big">${ICON.star(56)}</div><div>${t('ended')}</div><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div>`;
+      cover.innerHTML = `<div class="ended"><div class="big">${ICON.star(56)}</div><div>${t('ended')}</div><div class="row"><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div></div>`;
       cover.hidden = false;
     } else if (state === 2) {
       cover.innerHTML = `<button class="play-big" data-a="play" aria-label="play">▶</button>`;
