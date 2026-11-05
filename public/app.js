@@ -20,7 +20,7 @@ function load() {
   const base = {
     videos: [],
     groups: DICT[browserLang].defaultGroups.slice(),
-    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true },
+    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true, biliNative: true },
     usage: { date: today(), sec: 0, bonus: 0 },
   };
   try {
@@ -395,6 +395,14 @@ function openExternal(url, w = 1100, h = 720) {
 }
 
 async function mountPlayer(box, v, onEnded) {
+  // B 站：装了助手就用 KidsTube 自己的播放器（手机 Firefox 也能播、没有 B 站推荐、能自动播放下一集），取不到再用嵌入播放器
+  if (v.platform === 'bilibili' && v.playType === 'iframe' && db.settings.biliNative !== false) {
+    box.innerHTML = `<div class="msg"><div class="spin"></div><div>${t('loading')}</div></div>`;
+    let src = null;
+    try { if (await detectHelper(1500)) src = await R.biliStream(v); } catch {}
+    if (!box.isConnected) return;
+    if (src) return mountVideo(box, v, src, onEnded, () => mountIframe(box, v, onEnded));
+  }
   if (v.playType === 'iframe') return mountIframe(box, v, onEnded);
   if (v.playType === 'external') {
     box.innerHTML = `<div class="msg"><div>${ICON.window(48)}</div><div>${t('extNeed')}</div><button class="btn primary" id="ext">${t('extOpen')}</button></div>`;
@@ -418,18 +426,33 @@ async function mountPlayer(box, v, onEnded) {
       return;
     }
   }
-  box.innerHTML = `<video controls autoplay playsinline controlslist="nodownload" ${v.thumb ? `poster="${esc(v.thumb)}"` : ''}></video>`;
-  const video = $('video', box);
-  video.addEventListener('loadedmetadata', () => box.classList.toggle('portrait', video.videoHeight > video.videoWidth));
-  video.addEventListener('ended', () => onEnded?.());
-  if (/\.m3u8(\?|$)/i.test(src) && !video.canPlayType('application/vnd.apple.mpegurl')) {
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js');
-    const hls = new window.Hls();
-    hls.loadSource(src);
-    hls.attachMedia(video);
-  } else video.src = src;
-  return () => blobUrl && URL.revokeObjectURL(blobUrl);
+  const done = mountVideo(box, v, src, onEnded);
+  return () => { done?.(); if (blobUrl) URL.revokeObjectURL(blobUrl); };
 }
+
+// onFail：视频还没开始播放就出错（如地址过期、被拒绝）时调用，用来退回嵌入播放器
+function mountVideo(box, v, src, onEnded, onFail) {
+  box.innerHTML = `<video controls autoplay playsinline controlslist="nodownload" referrerpolicy="no-referrer" ${v.thumb ? `poster="${esc(v.thumb)}"` : ''}></video>`;
+  const video = $('video', box);
+  let played = false;
+  video.addEventListener('loadedmetadata', () => box.classList.toggle('portrait', video.videoHeight > video.videoWidth));
+  video.addEventListener('playing', () => (played = true));
+  video.addEventListener('ended', () => onEnded?.());
+  if (onFail) video.addEventListener('error', () => { if (!played && box.isConnected) onFail(); });
+  if (/\.m3u8(\?|$)/i.test(src) && !video.canPlayType('application/vnd.apple.mpegurl')) {
+    let hls = null, gone = false;
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js').then(() => {
+      if (gone) return;
+      hls = new window.Hls();
+      hls.loadSource(src);
+      hls.attachMedia(video);
+    });
+    return () => { gone = true; hls?.destroy(); };
+  }
+  video.src = src;
+  return () => { video.removeAttribute('src'); video.load(); };
+}
+
 function loadScript(src) {
   return new Promise((ok, fail) => {
     if ([...document.scripts].some((s) => s.src === src)) return ok();
@@ -518,7 +541,7 @@ function renderWatch(id) {
   const timer = setInterval(() => {
     if (document.hidden) return;
     usage().sec++;
-    if (estimate && ++watched === estimate + 2 && !$('.next-hint', box)) {
+    if (estimate && $('iframe', box) && ++watched === estimate + 2 && !$('.next-hint', box)) {
       const hint = document.createElement('div');
       hint.className = 'next-hint';
       hint.innerHTML = `<span>${t('nextEp')}：${esc(next.title)}</span><a class="btn primary small" href="#/watch/${next.id}">${t('playNext')} ▶</a><button class="btn small" aria-label="close">✕</button>`;
@@ -970,6 +993,8 @@ function paneSettings(el) {
       <h3>${t('nextEp')}</h3>
       <label class="inline"><input type="checkbox" id="autoplay-next" ${s.autoplayNext ? 'checked' : ''}> ${t('autoplayNext')}</label>
       <p class="hint">${t('autoplayHint')}</p>
+      <label class="inline"><input type="checkbox" id="bili-native" ${s.biliNative !== false ? 'checked' : ''}> ${t('biliNative')}</label>
+      <p class="hint">${t('biliNativeHint')}</p>
       <h3>${t('lockTitle')}</h3>
       <label class="inline"><input type="checkbox" id="shield" ${s.shield ? 'checked' : ''}> ${t('shield')}</label>
       <p class="hint">${t('shieldHint')}</p>
@@ -985,6 +1010,7 @@ function paneSettings(el) {
     s.dailyLimit = Math.max(0, Number($('#limit').value) || 0);
     s.shield = $('#shield').checked;
     s.autoplayNext = $('#autoplay-next').checked;
+    s.biliNative = $('#bili-native').checked;
     s.sandbox = $('#sandbox').checked;
     save();
     toast(t('saved'));

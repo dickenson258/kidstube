@@ -45,6 +45,8 @@ Security design:
 
 Playback never needs the helper. Embedded YouTube and Bilibili players are loaded by the browser directly.
 
+With the helper installed, Bilibili videos play in KidsTube's own player by default. The helper fetches Bilibili's html5 mp4 address and the browser streams it directly. This works in Firefox for Android, where Bilibili's embedded player can't load video. It also shows no Bilibili recommendations and plays the next episode automatically. Members-only or paid videos fall back to the embedded player. The setting is under Settings.
+
 ## Other features
 
 - **Kids mode:** shows only videos in the library, with group chips and search. The parent area is protected by a 4-digit PIN.

@@ -690,6 +690,26 @@ export async function xhsStream(url) {
   if (!v.src) throw fail('XHS_NOTE');
   return v.src;
 }
+// B 站：通过助手取 html5 版 mp4 地址，在 KidsTube 自己的 <video> 里播放。
+// 手机版 Firefox 上 B 站嵌入播放器加载不出视频；而 mp4 服务器接受任何网站的浏览器请求，可以边下边播。
+// 会员 / 付费内容、分段视频或试看片段取不到完整 mp4，调用方会退回嵌入播放器。
+export async function biliStream(v) {
+  if (!transport) throw fail('NEED_HELPER');
+  const idq = v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid;
+  const view = await getJson(`https://api.bilibili.com/x/web-interface/view?${idq}`, { headers: BILI_REF });
+  if (view.code !== 0) throw fail('BILI_API', `${view.code} ${view.message || ''}`.trim());
+  const pg = view.data.pages?.[(v.page || 1) - 1] || view.data.pages?.[0];
+  const cid = pg?.cid || view.data.cid;
+  const d = await getJson(`https://api.bilibili.com/x/player/playurl?${idq}&cid=${cid}&qn=80&fnval=1&fnver=0&platform=html5&high_quality=1`, { headers: BILI_REF });
+  if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
+  const durl = d.data?.durl;
+  if (!durl || durl.length !== 1 || !durl[0].url) throw fail('BILI_API', 'no mp4');
+  // 试看：返回的时长明显短于视频时长
+  const full = (pg?.duration || view.data.duration || 0) * 1000;
+  if (d.data.is_preview || (full && d.data.timelength && d.data.timelength < full * 0.9)) throw fail('BILI_API', 'preview');
+  return https(durl[0].url);
+}
+
 export const XHS_HEADERS = XHS_REF;
 
 // 根据已加入的视频找到博主主页（旧数据没有 authorUrl 时现查）

@@ -186,7 +186,9 @@ export const DICT = {
     cancel: '取消',
     moreVideos: '更多视频',
     autoplayNext: '合集中播完一集后自动播放下一集',
-    autoplayHint: 'YouTube 和视频直链播完后会倒计时 5 秒自动播放下一集（可取消）。B 站播放器不会告诉网页什么时候播完，所以 B 站视频快结束时只在播放器底部提示"下一集"，由孩子自己点。播放页下方始终有"下一集"按钮。',
+    autoplayHint: 'YouTube、B 站（使用 KidsTube 播放器时）和视频直链播完后会倒计时 5 秒自动播放下一集（可取消）。B 站自带的嵌入播放器不会告诉网页什么时候播完，所以那时只在视频快结束时提示"下一集"。播放页下方始终有"下一集"按钮。',
+    biliNative: 'B 站视频使用 KidsTube 播放器（需要助手）',
+    biliNativeHint: '由助手取得视频地址，用 KidsTube 自己的播放器播放：手机版 Firefox 也能播，没有 B 站的推荐和跳转按钮，能自动播放下一集。会员 / 付费内容或取不到地址时自动改用 B 站嵌入播放器。',
     platforms: {
       youtube: 'YouTube', bilibili: '哔哩哔哩', xiaohongshu: '小红书', douyin: '抖音', tiktok: 'TikTok', vimeo: 'Vimeo', qq: '腾讯视频',
       youku: '优酷', iqiyi: '爱奇艺', mgtv: '芒果TV', ixigua: '西瓜视频', dailymotion: 'Dailymotion', direct: '视频文件', other: '其他',
@@ -407,7 +409,9 @@ export const DICT = {
     cancel: 'Cancel',
     moreVideos: 'More videos',
     autoplayNext: 'In collections, play the next episode automatically',
-    autoplayHint: 'YouTube and direct video links count down 5 seconds and then play the next episode (can be cancelled). The Bilibili player doesn’t tell the page when a video ends, so for Bilibili a “Next episode” prompt appears near the end and your child taps it. A “Next episode” button is always below the player.',
+    autoplayHint: 'YouTube, Bilibili (with the KidsTube player) and direct video links count down 5 seconds and then play the next episode (can be cancelled). Bilibili’s own embedded player doesn’t tell the page when a video ends, so then a “Next episode” prompt appears near the end instead. A “Next episode” button is always below the player.',
+    biliNative: 'Play Bilibili videos in the KidsTube player (needs the helper)',
+    biliNativeHint: 'The helper gets the video address and KidsTube plays it in its own player: works in Firefox for Android, no Bilibili recommendations or links, and the next episode plays automatically. Members-only / paid videos, or videos whose address can’t be fetched, fall back to Bilibili’s embedded player.',
     platforms: {
       youtube: 'YouTube', bilibili: 'Bilibili', xiaohongshu: 'Xiaohongshu', douyin: 'Douyin', tiktok: 'TikTok', vimeo: 'Vimeo', qq: 'Tencent Video',
       youku: 'Youku', iqiyi: 'iQIYI', mgtv: 'Mango TV', ixigua: 'Xigua', dailymotion: 'Dailymotion', direct: 'Video file', other: 'Other',
