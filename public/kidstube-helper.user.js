@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KidsTube 助手 / KidsTube Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.4.0
+// @version      1.5.0
 // @description  让 KidsTube 网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets KidsTube look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
@@ -48,7 +48,7 @@
   'use strict';
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.4.0';
+  const VERSION = '1.5.0';
   const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhslink\.cn|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
@@ -88,6 +88,9 @@
   // 1.3.0 曾保存过小红书登录信息；小红书已不再支持，清除它
   setValue('xhsCookie', '');
 
+  // 网页可以为大页面（如 YouTube 频道主页）请求更长的等待时间，默认 25 秒，最多 90 秒
+  const limit = (d) => Math.min(Math.max(Number(d.timeout) || 25000, 5000), 90000);
+
   function send(d) {
     // 网页不能直接设置 Cookie 请求头；交给脚本管理器的 cookie 选项（会合并进浏览器已有的 Cookie）
     const headers = { ...(d.headers || {}) };
@@ -103,7 +106,7 @@
         data: d.body,
         responseType: d.type === 'arraybuffer' ? 'arraybuffer' : undefined,
         anonymous: false,
-        timeout: d.type === 'arraybuffer' ? 300000 : 30000,
+        timeout: d.type === 'arraybuffer' ? 300000 : limit(d) + 5000,
         onload: resolve,
         onerror: () => reject(new Error('network error')),
         ontimeout: () => reject(new Error('timeout')),
@@ -134,7 +137,7 @@
       catch { return reply({ code: 'HELPER_APPROVAL', error: where }); }
       if (!ok) return reply({ code: 'HELPER_DENIED', error: 'denied' });
       let r;
-      try { r = await within(send(d), d.type === 'arraybuffer' ? 300000 : 25000, 'timeout'); }
+      try { r = await within(send(d), d.type === 'arraybuffer' ? 300000 : limit(d), 'timeout'); }
       catch (err) { return reply({ code: 'HELPER_NET', error: `${(err && err.message) || err} @ ${where}` }); }
       if (d.type === 'arraybuffer') {
         const buf = r.response instanceof ArrayBuffer ? r.response : null;

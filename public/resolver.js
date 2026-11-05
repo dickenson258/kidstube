@@ -18,8 +18,8 @@ export const fail = (code, detail = '') => Object.assign(new Error(code + (detai
 function corsOk(u) {
   return u.hostname === 'www.googleapis.com' || (/(^|\.)youtube\.com$/.test(u.hostname) && u.pathname === '/oembed') || (u.hostname === 'vimeo.com' && u.pathname.startsWith('/api/oembed'));
 }
-async function request(url, { method = 'GET', headers = {}, body, type = 'text' } = {}) {
-  if (transport) return transport({ url, method, headers, body, type });
+async function request(url, { method = 'GET', headers = {}, body, type = 'text', timeout } = {}) {
+  if (transport) return transport({ url, method, headers, body, type, timeout });
   if (corsOk(new URL(url))) {
     const r = await fetch(url, { method, body, headers: Object.fromEntries(Object.entries(headers).filter(([k]) => /^content-type$/i.test(k))) });
     return { status: r.status, url: r.url, data: type === 'arraybuffer' ? await r.arrayBuffer() : await r.text() };
@@ -204,6 +204,12 @@ function ytWalk(node, out, conts) {
 // 有的脚本管理器（如 Firefox 上的 Tampermonkey）发 POST 时带上扩展自己的 Origin（moz-extension://…），
 // YouTube 会返回 403。所以显式指定 Origin；如果仍被拒绝，播放列表改为读取网页里自带的 ytInitialData（GET 请求，只有第一页）。
 const YT_HEADERS = { 'content-type': 'application/json', origin: 'https://www.youtube.com', 'x-origin': 'https://www.youtube.com', referer: 'https://www.youtube.com/' };
+function ytFind(node, key, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 40) return null;
+  if (node[key]) return node[key];
+  for (const k in node) { const r = ytFind(node[k], key, depth + 1); if (r) return r; }
+  return null;
+}
 async function ytBrowse(payload) {
   let data, blocked = false;
   try {
@@ -215,7 +221,7 @@ async function ytBrowse(payload) {
   } catch (e) {
     if (!(e.code === 'HTTP' && /^40[13]/.test(e.detail || ''))) throw e;
     if (!payload.browseId?.startsWith('VL')) throw fail('YT_BLOCKED', e.detail);
-    const { text } = await getText(`https://www.youtube.com/playlist?list=${payload.browseId.slice(2)}`);
+    const { text } = await getText(`https://www.youtube.com/playlist?list=${payload.browseId.slice(2)}`, { timeout: 60000 });
     const m = /ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s.exec(text);
     if (!m) throw fail('YT_BLOCKED', e.detail);
     data = JSON.parse(m[1]);
@@ -224,17 +230,28 @@ async function ytBrowse(payload) {
   const out = [], conts = [];
   ytWalk(data, out, conts);
   const seen = new Set();
+  const owner = ytFind(data, 'videoOwnerRenderer')?.title?.runs?.[0]?.text || data.metadata?.channelMetadataRenderer?.title || '';
   const title = data.metadata?.playlistMetadataRenderer?.title || data.header?.playlistHeaderRenderer?.title?.simpleText ||
     data.header?.pageHeaderRenderer?.pageTitle || '';
-  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: blocked ? null : conts[conts.length - 1] || null, title, blocked };
+  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: blocked ? null : conts[conts.length - 1] || null, title, owner, blocked };
 }
+// 频道 ID：先用很小的 resolve_url 接口（约 1KB）；频道主页有 1～2MB，手机网络经助手下载容易超时
 async function ytChannelInfo(u) {
   let id = pick(/^\/channel\/(UC[\w-]{22})/, u.pathname);
   const base = u.pathname.split('/').slice(0, 2).join('/');
-  const { text } = await getText(`https://www.youtube.com${id ? '/channel/' + id : base}`);
-  id = id || pick(/"externalId":"(UC[\w-]{22})"/, text) || pick(/channel\/(UC[\w-]{22})/, text);
+  if (id) return { id, name: '' };
+  try {
+    const d = await getJson('https://www.youtube.com/youtubei/v1/navigation/resolve_url?prettyPrint=false', {
+      method: 'POST', headers: YT_HEADERS,
+      body: JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: '2.20251020.01.00' } }, url: 'https://www.youtube.com' + base }),
+    });
+    id = d.endpoint?.browseEndpoint?.browseId;
+    if (/^UC[\w-]{22}$/.test(id || '')) return { id, name: '' };
+  } catch {}
+  const { text } = await getText(`https://www.youtube.com${base}`, { timeout: 60000 });
+  id = pick(/"externalId":"(UC[\w-]{22})"/, text) || pick(/channel\/(UC[\w-]{22})/, text);
   if (!id) throw fail('YT_CHANNEL');
-  return { id, name: meta(text, 'og:title') || id };
+  return { id, name: meta(text, 'og:title') || '' };
 }
 // YouTube Data API：始终由网页直接请求（允许跨域）。不经过助手，因为助手发出的请求不带网页来源（Referer），
 // 限制了"网站"的 API Key 会被拒绝（403）。出错时显示 Google 给出的原因。
@@ -304,6 +321,7 @@ async function ytCreatorWeb(u, c) {
   }
   let r = await ytBrowse({ browseId });
   if (!r.videos.length && channelId) r = await ytBrowse({ browseId: channelId, params: 'EgZ2aWRlb3PyBgQKAjoA' });
+  if (!listId && !author) author = r.owner || r.videos.find((v) => v.author)?.author || decodeURIComponent(u.pathname.split('/')[1] || '');
   if (listId) author = r.title || 'Playlist'; // 播放列表：author 字段放列表名，视频各自保留所属频道
   r.videos.forEach((v) => (v.author = listId ? v.author || '' : author));
   return { author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author, list: !!listId }) : null, ...(r.blocked ? { noteCode: 'YT_FIRST_PAGE' } : {}) };
