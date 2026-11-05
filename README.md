@@ -59,7 +59,7 @@ With the helper installed, Bilibili videos play in KidsTube's own player by defa
 - **Daily watch-time limit:** a parent can add 15 more minutes with the PIN.
 - **Memberships / ad-free viewing:** sign in to each site in the same browser. YouTube Premium needs "Use my signed-in account" turned on.
   - Embedded players need third-party cookies allowed. On iPhone this means turning off "Prevent cross-site tracking" in Safari.
-- **Sign-in status:** with the helper installed, 🔒 → Accounts shows whether this browser is signed in to Bilibili and YouTube (and the Bilibili nickname). It re-checks when you come back from the sign-in page.
+- **Sign-in status:** with the helper installed, 🔒 → Accounts shows whether this browser is signed in to Bilibili, YouTube, Douyin, Tencent Video, Youku and iQIYI (with the nickname where the site provides one). It re-checks when you come back from the sign-in page.
 - **Xiaohongshu:** no longer supported, because its website doesn't play content. Xiaohongshu links show an error.
 - **Phones:** responsive layout, add to home screen, and in-page fullscreen fallback on iPhone.
 - **Backup / transfer:** export and import the list as JSON. Since data is stored per browser, this is how you move a list to a child's tablet.

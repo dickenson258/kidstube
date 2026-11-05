@@ -893,6 +893,29 @@ const LOGIN_CHECKS = {
     const m = /"LOGGED_IN":(true|false)/.exec((await helperRequest({ url: 'https://www.youtube.com/' })).data || '');
     return m ? { in: m[1] === 'true' } : null;
   },
+  // 抖音：字节账号接口，未登录时 error_code 1（"会话过期，请重新登录"）
+  douyin: async () => {
+    const j = JSON.parse((await helperRequest({ url: 'https://www.douyin.com/passport/web/account/info/?aid=1128&account_sdk_source=web', headers: { referer: 'https://www.douyin.com/' } })).data);
+    if (j.message === 'success' && j.data) return { in: true, name: j.data.screen_name || j.data.name };
+    return j.data?.error_code === 1 ? { in: false } : null;
+  },
+  // 腾讯视频：会员积分接口，未登录时 ret -11
+  qq: async () => {
+    const text = (await helperRequest({ url: 'https://vip.video.qq.com/fcgi-bin/comm_cgi?name=get_cscore&type=2&otype=json', headers: { referer: 'https://v.qq.com/' } })).data || '';
+    const j = JSON.parse(text.replace(/^[^(]*\(|\);?\s*$/g, ''));
+    return j.ret === 0 ? { in: true, name: j.nick || j.data?.nick } : j.ret === -11 ? { in: false } : null;
+  },
+  // 优酷：页面里服务端填入的 userId，未登录时为空（页面约 0.6MB，等待时间放宽）
+  youku: async () => {
+    const text = (await helperRequest({ url: 'https://www.youku.com/ku/webvip', timeout: 60000 })).data || '';
+    const m = /"userId":"([^"]*)"/.exec(text);
+    return m ? { in: !!m[1] } : null;
+  },
+  // 爱奇艺：会员成长值接口，未登录时 code Q00304（"用户未登录"）
+  iqiyi: async () => {
+    const j = JSON.parse((await helperRequest({ url: 'https://serv.vip.iqiyi.com/vipgrowth/query.action?platform=b6c13e26323c537d', headers: { referer: 'https://www.iqiyi.com/' } })).data);
+    return j.code === 'A00000' ? { in: true } : j.code === 'Q00304' ? { in: false } : null;
+  },
 };
 let loginCheckAt = 0;
 async function refreshLoginStates() {
