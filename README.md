@@ -36,11 +36,11 @@ Security design:
 | --- | --- | --- |
 | Single YouTube video | ✅ title and thumbnail read automatically | ✅ |
 | Single Bilibili video | ✅ title, thumbnail and duration read automatically (via Bilibili's JSONP endpoint) | ✅ |
-| Single video from Douyin / Tencent Video / Youku / Xigua / TikTok / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
+| Single video from Tencent Video / Youku / Xigua / TikTok / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
 | Vimeo, direct mp4 / m3u8 links | ✅ | ✅ |
 | YouTube channel / playlist import | ✅ requires a YouTube Data API key | ✅ no key needed |
 | Bilibili creator import | ❌ | ✅ |
-| Short links (b23.tv, v.douyin…) | ❌ open the link and paste the full address | ✅ expanded automatically |
+| Short links (b23.tv…) | ❌ open the link and paste the full address | ✅ expanded automatically |
 | Paid Bilibili series (番剧), iQIYI, Mango TV | Opens a window from the original site | Same |
 
 Playback never needs the helper. Embedded YouTube and Bilibili players are loaded by the browser directly.
@@ -54,13 +54,13 @@ With the helper installed, Bilibili videos play in KidsTube's own player by defa
 - **Next episode:** the player always has a "Next episode" button for collections. YouTube and direct video links count down 5 seconds and play the next episode (can be cancelled; can be turned off in Settings). The Bilibili player doesn't report when a video ends, so a "Next episode" prompt appears near the estimated end instead.
 - **Creator folders:** inside each category, videos are automatically grouped into second-level folders by creator (on both the kids' home page and the parent library).
 - **More from this creator:** any video in the library (or a lookup result) can open its creator's page so you can pick more videos to add.
-- **Paste share text:** when the pasted text has extra words around the link (e.g. Bilibili/Douyin "share" text), the link is extracted automatically and the title is pre-filled.
+- **Paste share text:** when the pasted text has extra words around the link (e.g. Bilibili "share" text), the link is extracted automatically and the title is pre-filled.
 - **Stay-in-app lock:** invisible covers over player logos and titles; YouTube recommendations are covered when a video is paused or ends; optional strict sandbox.
 - **Daily watch-time limit:** a parent can add 15 more minutes with the PIN.
 - **Memberships / ad-free viewing:** sign in to each site in the same browser. YouTube Premium needs "Use my signed-in account" turned on.
   - Embedded players need third-party cookies allowed. On iPhone this means turning off "Prevent cross-site tracking" in Safari.
-- **Sign-in status:** with the helper installed, 🔒 → Accounts shows whether this browser is signed in to Bilibili, YouTube, Douyin, Tencent Video, Youku and iQIYI (with the nickname where the site provides one). It re-checks when you come back from the sign-in page.
-- **Xiaohongshu:** no longer supported, because its website doesn't play content. Xiaohongshu links show an error.
+- **Sign-in status:** with the helper installed, 🔒 → Accounts shows whether this browser is signed in to Bilibili, YouTube, Tencent Video, Youku and iQIYI (with the nickname where the site provides one). It re-checks when you come back from the sign-in page.
+- **Xiaohongshu and Douyin:** no longer supported. Xiaohongshu's website doesn't play content, and Douyin isn't a good fit for kids. Their links show an error, and any of their videos already in the library are hidden from kids mode; a parent can delete them in the library.
 - **Phones:** responsive layout, add to home screen, and in-page fullscreen fallback on iPhone.
 - **Backup / transfer:** export and import the list as JSON. Since data is stored per browser, this is how you move a list to a child's tablet.
 

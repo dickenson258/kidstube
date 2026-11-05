@@ -247,7 +247,10 @@ function creatorsOf(list) {
   return [...map.values()].sort((a, b) => b.count - a.count);
 }
 // ---------- 合集：每个视频可带 series = { id, title, index }
-const seriesEps = (id) => db.videos.filter((x) => x.series?.id === id).sort((a, b) => a.series.index - b.series.index);
+// 已停止支持的网站（不适合孩子 / 网页版无法观看）：库里旧的视频不在孩子模式里出现，家长可在视频库中删除
+const RETIRED = new Set(['douyin', 'xiaohongshu']);
+const kidVideos = () => db.videos.filter((v) => !RETIRED.has(v.platform));
+const seriesEps = (id) => kidVideos().filter((x) => x.series?.id === id).sort((a, b) => a.series.index - b.series.index);
 const epNo = (v) => seriesEps(v.series.id).findIndex((x) => x.id === v.id) + 1;
 function nextEpisode(v) {
   if (!v.series) return null;
@@ -282,10 +285,10 @@ function homeCards(list, merge) {
   }).join('');
 }
 function renderHome() {
-  const groups = db.groups.filter((g) => db.videos.some((v) => v.group === g));
+  const groups = db.groups.filter((g) => kidVideos().some((v) => v.group === g));
   if (homeGroup !== ALL && !groups.includes(homeGroup)) homeGroup = ALL;
   const q = homeQuery.toLowerCase();
-  const inGroup = db.videos.filter((v) => homeGroup === ALL || v.group === homeGroup);
+  const inGroup = kidVideos().filter((v) => homeGroup === ALL || v.group === homeGroup);
   const creators = creatorsOf(inGroup);
   if (homeCreator !== ALL && !creators.some((c) => c.key === homeCreator)) homeCreator = ALL;
   const list = inGroup
@@ -294,10 +297,10 @@ function renderHome() {
   app.innerHTML =
     topbar(`<input class="search" id="q" placeholder="${t('search')}" value="${esc(homeQuery)}">`) +
     `<main class="wrap">
-      ${db.videos.length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
+      ${kidVideos().length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
       ${creators.length > 1 ? `<div class="chips sub">${[{ key: ALL, name: t('allCreators') }, ...creators].map((c) => `<button class="chip folder ${c.key === homeCreator ? 'on' : ''}" data-c="${esc(c.key)}">${ICON.folder(16)}<span>${esc(c.name)}</span>${c.count ? `<em>${c.count}</em>` : ''}</button>`).join('')}</div>` : ''}
       ${list.length ? `<div class="grid">${homeCards(list, !q)}</div>`
-        : db.videos.length ? `<div class="empty"><div class="big">${ICON.search(64)}</div><h2>${t('notFound')}</h2></div>`
+        : kidVideos().length ? `<div class="empty"><div class="big">${ICON.search(64)}</div><h2>${t('notFound')}</h2></div>`
         : `<div class="empty"><div class="big">${ICON.tv(72)}</div><h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`}
     </main>`;
   bindTopbar();
@@ -347,7 +350,7 @@ const SHIELDS = {
 };
 
 // 每个网站单独设置是否用沙箱；默认只有 YouTube 开启（旧版的"全部开启"选项迁移为每个网站都开）
-const SANDBOX_SITES = ['youtube', 'bilibili', 'douyin', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'dailymotion', 'other'];
+const SANDBOX_SITES = ['youtube', 'bilibili', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'dailymotion', 'other'];
 function sandboxOn(platform) {
   const s = db.settings;
   if (!s.sandboxSites) s.sandboxSites = s.sandbox ? Object.fromEntries(SANDBOX_SITES.map((p) => [p, true])) : { youtube: true };
@@ -490,14 +493,14 @@ function renderRest() {
 }
 
 function renderWatch(id) {
-  const v = db.videos.find((x) => x.id === id);
+  const v = kidVideos().find((x) => x.id === id);
   if (!v) { location.hash = '#/'; return; }
   if (usage().sec >= limitSec()) return renderRest();
   document.title = v.title + ' · KidsTube';
   const eps = v.series ? seriesEps(v.series.id) : [];
   const next = nextEpisode(v);
   const rank = (x) => (creatorKey(x) === creatorKey(v) ? 0 : x.group === v.group ? 1 : 2);
-  const more = db.videos.filter((x) => x.id !== v.id && !(v.series && x.series?.id === v.series.id)).sort((a, b) => rank(a) - rank(b)).slice(0, 12);
+  const more = kidVideos().filter((x) => x.id !== v.id && !(v.series && x.series?.id === v.series.id)).sort((a, b) => rank(a) - rank(b)).slice(0, 12);
   app.innerHTML =
     topbar() +
     `<main class="wrap watch">
@@ -654,7 +657,7 @@ function paneAdd(el) {
     <p class="hint">${t('addHint')}</p>
     <div class="row"><input class="field grow" id="url" placeholder="${t('addPlaceholder')}" autocomplete="off">
       <select class="field" id="grp" style="width:auto">${groupOptions(lastGroup || db.groups[0])}</select><button class="btn primary" id="go">${t('parse')}</button></div>
-    <div class="platforms">${['youtube', 'bilibili', 'douyin', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'iqiyi'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span></div>
+    <div class="platforms">${['youtube', 'bilibili', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'iqiyi'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span></div>
     <div id="helper-tip"></div><div id="result"></div></div>`;
   bindGroupSelect($('#grp'));
   detectHelper().then((v) => {
@@ -879,7 +882,6 @@ function paneLibrary(el) {
 const LOGINS = [
   { key: 'youtube', url: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F', color: '#ff0033' },
   { key: 'bilibili', url: 'https://passport.bilibili.com/login', color: '#fb7299' },
-  { key: 'douyin', url: 'https://sso.douyin.com/?service=' + encodeURIComponent('https://www.douyin.com/'), color: '#111' },
   { key: 'qq', url: 'https://film.qq.com/weixin/login.html?ru=' + encodeURIComponent('https://v.qq.com/'), color: '#ff6a00' },
   // 优酷首页在手机上会换成引导打开 App 的手机版；专门的登录页在手机上也能用账号密码 / 验证码登录
   { key: 'youku', url: 'https://account.youku.com/?callback=' + encodeURIComponent('https://www.youku.com/'), color: '#1f8cff' },
@@ -894,12 +896,6 @@ const LOGIN_CHECKS = {
   youtube: async () => {
     const m = /"LOGGED_IN":(true|false)/.exec((await helperRequest({ url: 'https://www.youtube.com/' })).data || '');
     return m ? { in: m[1] === 'true' } : null;
-  },
-  // 抖音：字节账号接口，未登录时 error_code 1（"会话过期，请重新登录"）
-  douyin: async () => {
-    const j = JSON.parse((await helperRequest({ url: 'https://www.douyin.com/passport/web/account/info/?aid=1128&account_sdk_source=web', headers: { referer: 'https://www.douyin.com/' } })).data);
-    if (j.message === 'success' && j.data) return { in: true, name: j.data.screen_name || j.data.name };
-    return j.data?.error_code === 1 ? { in: false } : null;
   },
   // 腾讯视频：会员积分接口，未登录时 ret -11
   qq: async () => {
