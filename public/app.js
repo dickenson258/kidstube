@@ -379,12 +379,15 @@ function watchYouTube(box, onEnded) {
     if (a === 'replay') { cmd('seekTo', [0, true]); cmd('playVideo'); cover.hidden = true; }
     if (a === 'play' || e.target === cover) { cmd('playVideo'); cover.hidden = true; }
   };
+  let lastState = null;
   const onMsg = (e) => {
     if (e.source !== iframe.contentWindow) return;
     let d;
     try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
-    if (d?.event === 'onStateChange') show(d.info);
-    else if (d?.event === 'infoDelivery' && typeof d.info?.playerState === 'number') show(d.info.playerState);
+    const state = d?.event === 'onStateChange' ? d.info : d?.event === 'infoDelivery' && typeof d.info?.playerState === 'number' ? d.info.playerState : null;
+    if (state === null) return;
+    show(state);
+    if (state !== lastState) { lastState = state; box.dispatchEvent(new Event('kt-state')); }
   };
   window.addEventListener('message', onMsg);
   return () => window.removeEventListener('message', onMsg);
@@ -525,14 +528,22 @@ function renderWatch(id) {
   let watched = 0;
   // iPhone Safari 不支持对普通元素全屏，改用铺满屏幕的"伪全屏"（并提示横屏）
   const exitPseudo = () => { box.classList.remove('pseudo-fs'); document.body.classList.remove('no-scroll'); };
-  // 全屏后锁定横屏（Android 上的 Firefox / Chrome 支持；手机开着"锁定竖屏"时也能横过来）。竖屏视频不锁
+  // 全屏后锁定横屏（Android 上的 Firefox / Chrome 支持；手机开着"锁定竖屏"时也能横过来）。竖屏视频不锁。
+  // Firefox 手机版在视频暂停时会自己把方向还原成竖屏，所以全屏期间一旦被转回竖屏、或播放器暂停/继续，就重新锁定
+  const wantLandscape = () => document.fullscreenElement === box && !box.classList.contains('portrait');
+  const relock = () => { if (wantLandscape()) screen.orientation?.lock?.('landscape').catch(() => {}); };
+  const relockSoon = () => { relock(); setTimeout(relock, 300); setTimeout(relock, 1000); };
   const onFsChange = () => {
     const o = screen.orientation;
     if (!o) return;
-    if (document.fullscreenElement === box) { if (!box.classList.contains('portrait')) o.lock?.('landscape').catch(() => {}); }
+    if (wantLandscape()) relock();
     else if (!document.fullscreenElement) { try { o.unlock?.(); } catch {} }
   };
+  const onOrient = () => { if (wantLandscape() && screen.orientation.type.startsWith('portrait')) relock(); };
   document.addEventListener('fullscreenchange', onFsChange);
+  screen.orientation?.addEventListener?.('change', onOrient);
+  // 播放状态变化：自己的 <video>（pause / play 不冒泡，用捕获）和 YouTube 播放器（watchYouTube 发出 kt-state）
+  ['pause', 'play', 'kt-state'].forEach((ev) => box.addEventListener(ev, relockSoon, true));
   $('#fs').onclick = () => {
     const req = box.requestFullscreen || box.webkitRequestFullscreen;
     if (req) return Promise.resolve(req.call(box)).catch(() => {});
@@ -565,7 +576,7 @@ function renderWatch(id) {
       renderRest();
     }
   }, 1000);
-  cleanup = () => { clearInterval(timer); clearInterval(countdown); unmount?.(); exitPseudo(); document.removeEventListener('fullscreenchange', onFsChange); save(); };
+  cleanup = () => { clearInterval(timer); clearInterval(countdown); unmount?.(); exitPseudo(); document.removeEventListener('fullscreenchange', onFsChange); screen.orientation?.removeEventListener?.('change', onOrient); save(); };
 }
 
 // ------------------------------------------------------------ 家长后台
