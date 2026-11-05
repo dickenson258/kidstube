@@ -1,6 +1,31 @@
 # KidsTube
 
+**Try it:** <https://dickenson258.github.io/kidstube/> · free, open source (MIT), no sign-up
+
 A kids' video site where parents choose exactly which videos their children can watch.
+
+一个由家长挑选视频的儿童视频站：孩子只能看到你加进白名单的视频。没有广告推荐流，没有"猜你喜欢"，没有账号，数据不上云。
+
+## Why
+
+Video apps for kids have three problems for parents:
+
+- **You don't control what's on.** One cartoon leads to an endless feed of recommendations you never picked.
+- **Ads and unrelated videos.** Pause, and the screen fills with thumbnails that pull the child somewhere else.
+- **Content is scattered.** The good shows are split across YouTube, Bilibili, Tencent Video, Youku and iQIYI, each with its own app.
+
+KidsTube puts one list in front of the child: only the videos the parent added, from any of those sites, in one place.
+
+## Highlights
+
+- **Whitelist only.** Kids mode shows only videos in the library. The parent area is behind a 4-digit PIN.
+- **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Xigua, Vimeo, direct mp4 / m3u8 links. Import whole collections, playlists or a creator's channel.
+- **No recommendations or outbound links.** Player logos, titles and end-screen recommendations are covered; an optional per-site sandbox blocks links out of the player. Bilibili videos can play in KidsTube's own player, with no Bilibili recommendations.
+- **Privacy: data never leaves the device.** No server, no account, no analytics. The list and settings live only in the browser (localStorage); move them to another device with a JSON export.
+- **Daily watch-time limit**, automatic next episode, and memberships you already pay for (sign in to each site in the same browser).
+- **Works on phones and tablets.** Add it to the home screen. Chinese / English.
+
+## Overview
 
 - **Pure static website, no server.** Link resolving runs in the browser.
 - **Data stays local.** Video lists and settings are stored only in the browser (localStorage) and are never uploaded.

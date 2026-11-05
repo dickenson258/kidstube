@@ -4,6 +4,7 @@
   "description": "KidsTube - 家长自选视频白名单的儿童视频站。纯静态网站，数据只存本地浏览器",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "start": "node server.js"
   },
