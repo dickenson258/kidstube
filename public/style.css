@@ -303,3 +303,16 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
   .lib tr.on { background: color-mix(in srgb, var(--brand) 8%, transparent); border-radius: 12px; }
   .lib tr.on td { background: none; }
 }
+
+/* 播放记录：缩略图进度条、首页"接着看"、续播提示 */
+.thumb .prog { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(0,0,0,.25); }
+.thumb .prog i { display: block; height: 100%; background: var(--brand); }
+.row-title { display: flex; align-items: center; gap: 6px; font-size: 18px; margin: 6px 0 12px; }
+.grid.continue { margin-bottom: 22px; }
+.resume-at { font-size: 12px; font-weight: 700; color: var(--brand); margin-bottom: 2px; }
+.resume-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 0; padding: 8px 12px; border-radius: 12px; background: var(--brand-soft); font-size: 14px; transition: opacity .6s; }
+.resume-bar.fade { opacity: .55; }
+
+/* 博主视频排序 */
+.chips.sort { margin-top: -4px; }
+.chips.sort .chip { padding: 6px 14px; font-size: 14px; }

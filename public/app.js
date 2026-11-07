@@ -39,6 +39,21 @@ function usage() {
 }
 const limitSec = () => (db.settings.dailyLimit ? db.settings.dailyLimit * 60 + (usage().bonus || 0) : Infinity);
 
+// 播放记录：{ 视频 id: { t: 看到第几秒, d: 总时长, at: 最后观看时间 } }，只存在本浏览器
+// 看完（或只剩最后几秒）就从记录里去掉，首页"接着看"只显示没看完的
+const PROGRESS_MAX = 40;
+function progressOf(id) { return (db.progress || {})[id] || null; }
+function setProgress(id, t, d) {
+  const p = (db.progress ||= {});
+  if (d && t >= d - 8) { delete p[id]; return; } // 已看完
+  p[id] = { t: Math.floor(t || 0), d: Math.floor(d || 0), at: Date.now() };
+  const ids = Object.keys(p);
+  if (ids.length > PROGRESS_MAX) ids.sort((a, b) => p[a].at - p[b].at).slice(0, ids.length - PROGRESS_MAX).forEach((k) => delete p[k]);
+}
+// 有记录的位置才续播：至少看了 5 秒，并且不是快结束了
+const resumePoint = (id) => { const p = progressOf(id); return p && p.t >= 5 && (!p.d || p.t < p.d - 8) ? p.t : 0; };
+const fmtTime = (sec) => { sec = Math.floor(sec); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = String(sec % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
+
 // ------------------------------------------------------------ 多语言
 const L = () => DICT[db.settings.lang] || DICT.zh;
 function t(key, ...args) {
@@ -123,6 +138,7 @@ const ICON = {
   moon: (n) => svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>', n),
   star: (n) => svg('<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>', n),
   folder: (n) => svg('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>', n),
+  play: (n) => svg('<path d="M8 5.5v13l10-6.5z"/>', n),
   window: (n) => svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M14 13h4v4"/><path d="m18 13-5 5"/>', n),
 };
 const thumbImg = (v) => (v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '');
@@ -251,6 +267,19 @@ function creatorsOf(list) {
 const RETIRED = new Set(['douyin', 'xiaohongshu']);
 const kidVideos = () => db.videos.filter((v) => !RETIRED.has(v.platform));
 const seriesEps = (id) => kidVideos().filter((x) => x.series?.id === id).sort((a, b) => a.series.index - b.series.index);
+// 博主视频排序（孩子在首页选中博主后切换，按博主分别记住）；合集内部始终按集数
+const SORTS = ['new', 'old', 'az', 'za'];
+const collator = new Intl.Collator(['zh-Hans-CN', 'en'], { numeric: true, sensitivity: 'base' }); // "第2集" 排在 "第10集" 前
+const creatorSort = (key) => (SORTS.includes(db.creatorSort?.[key]) ? db.creatorSort[key] : 'new');
+// bySeries：首页合并合集时，合集按合集名称参与排序
+function sortVideos(list, mode, bySeries = false) {
+  const idx = new Map(db.videos.map((v, i) => [v.id, i])); // 视频库顺序：新加入的在前
+  const added = (v) => v.addedAt || 0;
+  const name = (v) => (bySeries && v.series ? v.series.title : v.title) || '';
+  const byNew = (a, b) => added(b) - added(a) || idx.get(a.id) - idx.get(b.id);
+  const cmp = { new: byNew, old: (a, b) => -byNew(a, b), az: (a, b) => collator.compare(name(a), name(b)) || byNew(a, b), za: (a, b) => collator.compare(name(b), name(a)) || byNew(a, b) }[mode];
+  return [...list].sort(cmp);
+}
 const epNo = (v) => seriesEps(v.series.id).findIndex((x) => x.id === v.id) + 1;
 function nextEpisode(v) {
   if (!v.series) return null;
@@ -260,9 +289,13 @@ function nextEpisode(v) {
 }
 const durSec = (d) => String(d || '').split(':').reduce((a, b) => a * 60 + (Number(b) || 0), 0);
 
+function progressBar(v) {
+  const p = progressOf(v.id);
+  return p && p.d && p.t > 0 ? `<span class="prog"><i style="width:${Math.min(100, Math.round((p.t / p.d) * 100))}%"></i></span>` : '';
+}
 function videoCard(v, { ep, current } = {}) {
   return `<a class="card ${current ? 'current' : ''}" href="#/watch/${v.id}">
-    <div class="thumb">${thumbImg(v)}<span class="plat plat-${v.platform}">${esc(platName(v.platform))}</span>${v.duration ? `<span class="dur">${esc(v.duration)}</span>` : ''}</div>
+    <div class="thumb">${thumbImg(v)}<span class="plat plat-${v.platform}">${esc(platName(v.platform))}</span>${v.duration ? `<span class="dur">${esc(v.duration)}</span>` : ''}${progressBar(v)}</div>
     <div class="body"><div class="title">${esc(v.title)}</div><div class="sub">${ep ? `<b class="ep-tag">${t('epN', ep)}</b> ` : ''}${esc(v.author || '')}</div></div></a>`;
 }
 function seriesCard(series, eps) {
@@ -284,6 +317,24 @@ function homeCards(list, merge) {
     return seriesCard(v.series, eps);
   }).join('');
 }
+// 首页"接着看"：最近没看完的视频（最多 4 个，最近的在前）
+function continueRow(show) {
+  if (!show) return '';
+  const vids = kidVideos();
+  const items = Object.entries(db.progress || {})
+    .sort((a, b) => b[1].at - a[1].at)
+    .map(([id]) => vids.find((v) => v.id === id))
+    .filter(Boolean)
+    .slice(0, 4);
+  if (!items.length) return '';
+  return `<h2 class="row-title">${ICON.play(18)} ${t('continueWatching')}</h2>
+    <div class="grid continue">${items.map((v) => {
+      const at = resumePoint(v.id);
+      const ep = v.series ? epNo(v) : 0;
+      return videoCard(v, { ep: ep || undefined }).replace('<div class="body">', `<div class="body">${at ? `<div class="resume-at">${t('resumeAt', fmtTime(at))}</div>` : ''}`);
+    }).join('')}</div>
+    <h2 class="row-title">${t('allVideos')}</h2>`;
+}
 function renderHome() {
   const groups = db.groups.filter((g) => kidVideos().some((v) => v.group === g));
   if (homeGroup !== ALL && !groups.includes(homeGroup)) homeGroup = ALL;
@@ -291,14 +342,18 @@ function renderHome() {
   const inGroup = kidVideos().filter((v) => homeGroup === ALL || v.group === homeGroup);
   const creators = creatorsOf(inGroup);
   if (homeCreator !== ALL && !creators.some((c) => c.key === homeCreator)) homeCreator = ALL;
-  const list = inGroup
+  let list = inGroup
     .filter((v) => homeCreator === ALL || creatorKey(v) === homeCreator)
     .filter((v) => !q || (v.title + v.author).toLowerCase().includes(q));
+  const sortMode = homeCreator === ALL ? null : creatorSort(homeCreator);
+  if (sortMode) list = sortVideos(list, sortMode, !q);
   app.innerHTML =
     topbar(`<input class="search" id="q" placeholder="${t('search')}" value="${esc(homeQuery)}">`) +
     `<main class="wrap">
       ${kidVideos().length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
       ${creators.length > 1 ? `<div class="chips sub">${[{ key: ALL, name: t('allCreators') }, ...creators].map((c) => `<button class="chip folder ${c.key === homeCreator ? 'on' : ''}" data-c="${esc(c.key)}">${ICON.folder(16)}<span>${esc(c.name)}</span>${c.count ? `<em>${c.count}</em>` : ''}</button>`).join('')}</div>` : ''}
+      ${sortMode ? `<div class="chips sort">${SORTS.map((m) => `<button class="chip small ${m === sortMode ? 'on' : ''}" data-sort="${m}">${t('sort_' + m)}</button>`).join('')}</div>` : ''}
+      ${continueRow(!q && homeGroup === ALL && homeCreator === ALL)}
       ${list.length ? `<div class="grid">${homeCards(list, !q)}</div>`
         : kidVideos().length ? `<div class="empty"><div class="big">${ICON.search(64)}</div><h2>${t('notFound')}</h2></div>`
         : `<div class="empty"><div class="big">${ICON.tv(72)}</div><h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`}
@@ -306,6 +361,7 @@ function renderHome() {
   bindTopbar();
   app.querySelectorAll('.chip[data-g]').forEach((c) => (c.onclick = () => { homeGroup = c.dataset.g; homeCreator = ALL; renderHome(); }));
   app.querySelectorAll('.chip[data-c]').forEach((c) => (c.onclick = () => { homeCreator = c.dataset.c; renderHome(); }));
+  app.querySelectorAll('.chip[data-sort]').forEach((c) => (c.onclick = () => { (db.creatorSort ||= {})[homeCreator] = c.dataset.sort; save(); renderHome(); }));
   const input = $('#q');
   input.oninput = () => {
     homeQuery = input.value;
@@ -335,10 +391,10 @@ function embedUrl(v) {
   if (v.platform === 'youtube') {
     const host = db.settings.ytLoggedIn ? 'https://www.youtube.com' : 'https://www.youtube-nocookie.com';
     const hl = db.settings.lang === 'zh' ? 'zh-CN' : 'en';
-    return `${host}/embed/${v.vid}?autoplay=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&fs=0&enablejsapi=1&hl=${hl}&origin=${encodeURIComponent(location.origin)}`;
+    return `${host}/embed/${v.vid}?autoplay=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&fs=0&enablejsapi=1&hl=${hl}&origin=${encodeURIComponent(location.origin)}${v.resumeAt ? `&start=${v.resumeAt}` : ''}`;
   }
   if (v.platform === 'bilibili' && v.playType === 'iframe')
-    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&page=${v.page || 1}&autoplay=1&danmaku=0&high_quality=1`;
+    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&page=${v.page || 1}&autoplay=1&danmaku=0&high_quality=1${v.resumeAt ? `&t=${v.resumeAt}` : ''}`;
   return v.embed;
 }
 
@@ -383,6 +439,7 @@ function watchYouTube(box, onEnded) {
   iframe.addEventListener('load', () => { listen(); setTimeout(listen, 800); });
   const show = (state) => {
     if (state === 0) {
+      box.dispatchEvent(new CustomEvent('kt-time', { detail: { t: Infinity, d: 1 } }));
       if (onEnded?.()) { cover.hidden = true; return; } // 有下一集：交给倒计时
       cover.innerHTML = `<div class="ended"><div class="big">${ICON.star(56)}</div><div>${t('ended')}</div><div class="row"><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div></div>`;
       cover.hidden = false;
@@ -396,11 +453,16 @@ function watchYouTube(box, onEnded) {
     if (a === 'replay') { cmd('seekTo', [0, true]); cmd('playVideo'); cover.hidden = true; }
     if (a === 'play' || e.target === cover) { cmd('playVideo'); cover.hidden = true; }
   };
-  let lastState = null;
+  let lastState = null, ytDur = 0;
   const onMsg = (e) => {
     if (e.source !== iframe.contentWindow) return;
     let d;
     try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+    // 播放进度（用于播放记录）
+    if (d?.event === 'infoDelivery' && typeof d.info?.currentTime === 'number') {
+      if (d.info.duration) ytDur = d.info.duration;
+      box.dispatchEvent(new CustomEvent('kt-time', { detail: { t: d.info.currentTime, d: ytDur } }));
+    }
     const state = d?.event === 'onStateChange' ? d.info : d?.event === 'infoDelivery' && typeof d.info?.playerState === 'number' ? d.info.playerState : null;
     if (state === null) return;
     show(state);
@@ -455,7 +517,10 @@ function mountVideo(box, v, src, onEnded, onFail) {
   box.innerHTML = `<video controls autoplay playsinline controlslist="nodownload" referrerpolicy="no-referrer" ${v.thumb ? `poster="${esc(v.thumb)}"` : ''}></video>`;
   const video = $('video', box);
   let played = false;
-  video.addEventListener('loadedmetadata', () => box.classList.toggle('portrait', video.videoHeight > video.videoWidth));
+  video.addEventListener('loadedmetadata', () => {
+    box.classList.toggle('portrait', video.videoHeight > video.videoWidth);
+    if (v.resumeAt && v.resumeAt < video.duration - 8) video.currentTime = v.resumeAt;
+  }, { once: false });
   video.addEventListener('playing', () => (played = true));
   video.addEventListener('ended', () => onEnded?.());
   if (onFail) video.addEventListener('error', () => { if (!played && box.isConnected) onFail(); });
@@ -501,8 +566,13 @@ function renderWatch(id) {
   document.title = v.title + ' · KidsTube';
   const eps = v.series ? seriesEps(v.series.id) : [];
   const next = nextEpisode(v);
-  const rank = (x) => (creatorKey(x) === creatorKey(v) ? 0 : x.group === v.group ? 1 : 2);
-  const more = kidVideos().filter((x) => x.id !== v.id && !(v.series && x.series?.id === v.series.id)).sort((a, b) => rank(a) - rank(b)).slice(0, 12);
+  // 右侧列表：合集 → 按集数；非合集 → 这个博主的全部视频，顺序和首页为该博主选的排序一致（当前视频高亮）；再列其他视频
+  const ck = creatorKey(v);
+  const creatorList = v.series ? [] : sortVideos(kidVideos().filter((x) => creatorKey(x) === ck), creatorSort(ck));
+  const more = kidVideos()
+    .filter((x) => x.id !== v.id && !(v.series && x.series?.id === v.series.id) && !creatorList.some((c) => c.id === x.id))
+    .sort((a, b) => (creatorKey(a) === ck ? 0 : a.group === v.group ? 1 : 2) - (creatorKey(b) === ck ? 0 : b.group === v.group ? 1 : 2))
+    .slice(0, 12);
   app.innerHTML =
     topbar() +
     `<main class="wrap watch">
@@ -515,6 +585,7 @@ function renderWatch(id) {
       </section>
       <aside class="side">
         ${eps.length > 1 ? `<h3 class="side-title">${ICON.folder(16)} ${esc(v.series.title)}</h3>${eps.map((x, i) => videoCard(x, { ep: i + 1, current: x.id === v.id })).join('')}<h3 class="side-title">${t('moreVideos')}</h3>` : ''}
+        ${creatorList.length > 1 ? `<h3 class="side-title">${ICON.folder(16)} ${esc(v.author || '')} · ${t('sort_' + creatorSort(ck))}</h3>${creatorList.map((x) => videoCard(x, { current: x.id === v.id })).join('')}<h3 class="side-title">${t('moreVideos')}</h3>` : ''}
         ${more.map((x) => videoCard(x)).join('')}
       </aside>
     </main>`;
@@ -539,7 +610,33 @@ function renderWatch(id) {
     $('[data-a="cancel"]', el).onclick = () => { clearInterval(countdown); el.remove(); };
     return true;
   };
-  Promise.resolve(mountPlayer(box, v, onEnded)).then((fn) => (unmount = fn));
+  // 播放记录：从上次的位置接着播（YouTube / B 站 / 直链视频能定位；其他网站的嵌入播放器只记录"看过"）
+  const resumeAt = resumePoint(v.id);
+  let moved = !resumeAt;
+  const startPlayer = (at) => { unmount?.(); Promise.resolve(mountPlayer(box, { ...v, resumeAt: at }, onEnded)).then((fn) => (unmount = fn)); };
+  startPlayer(resumeAt);
+  if (!progressOf(v.id)) setProgress(v.id, 0, durSec(v.duration));
+  else db.progress[v.id].at = Date.now();
+  save();
+  if (resumeAt) {
+    const bar = document.createElement('div');
+    bar.className = 'resume-bar';
+    bar.innerHTML = `<span>${t('resumedFrom', fmtTime(resumeAt))}</span><button class="btn small" data-a="restart">${t('restart')}</button>`;
+    $('section', app).insertBefore(bar, box.nextSibling);
+    $('[data-a="restart"]', bar).onclick = () => { bar.remove(); moved = true; setProgress(v.id, 0, progressOf(v.id)?.d); save(); startPlayer(0); };
+    setTimeout(() => bar.isConnected && bar.classList.add('fade'), 8000);
+  }
+  let lastSaved = 0;
+  const track = (cur, dur) => {
+    if (!(cur >= 0)) return;
+    // 续播时播放器刚加载会先报 0 秒，别用它覆盖上次的位置
+    if (!moved) { if (cur < 1) return; moved = true; }
+    setProgress(v.id, cur, dur || progressOf(v.id)?.d || durSec(v.duration));
+    if (Math.abs(cur - lastSaved) >= 5) { lastSaved = cur; save(); }
+  };
+  box.addEventListener('timeupdate', (e) => e.target.tagName === 'VIDEO' && track(e.target.currentTime, e.target.duration), true);
+  box.addEventListener('kt-time', (e) => track(e.detail.t, e.detail.d));
+  box.addEventListener('ended', () => { setProgress(v.id, Infinity, 1); save(); }, true);
   // B 站播放器不会通知播放结束：按时长估算，快结束时只在底部提示"下一集"，不自动切换
   const estimate = v.platform === 'bilibili' && v.playType === 'iframe' && next ? durSec(v.duration) : 0;
   let watched = 0;
