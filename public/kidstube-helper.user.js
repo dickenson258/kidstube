@@ -1,13 +1,12 @@
 // ==UserScript==
 // @name         KidsTube 助手 / KidsTube Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.5.0
+// @version      1.6.0
 // @description  让 KidsTube 网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets KidsTube look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
 // @updateURL    https://dickenson258.github.io/kidstube/kidstube-helper.user.js
 // @downloadURL  https://dickenson258.github.io/kidstube/kidstube-helper.user.js
-// @noframes
 // @run-at       document-end
 // @grant        GM_xmlhttpRequest
 // @grant        GM.xmlHttpRequest
@@ -46,9 +45,16 @@
  */
 (function () {
   'use strict';
+  // 优酷播放器嵌在 KidsTube 里时，浏览器会把优酷的登录 Cookie 当成第三方 Cookie 拦下，
+  // 播放器就以为没登录，会员也只能试看 6 分钟。这里在优酷播放器里请求浏览器的"存储访问"授权
+  // （Storage Access API，需要用户点一下），授权后播放器就能用上你在优酷网站上的登录状态。
+  if (window.top !== window) {
+    if (location.hostname === 'player.youku.com') youkuStorageAccess();
+    return; // 其他网页里的框架：什么都不做
+  }
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
   const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhslink\.cn|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
@@ -151,4 +157,25 @@
   });
 
   post({ __kt: 'pong', version: VERSION });
+
+  function youkuStorageAccess() {
+    if (typeof document.hasStorageAccess !== 'function' || typeof document.requestStorageAccess !== 'function') return;
+    document.hasStorageAccess().then((has) => {
+      if (has) return;
+      const zh = /^zh/i.test(navigator.language);
+      const bar = document.createElement('button');
+      bar.textContent = zh ? '🔑 家长点这里：让播放器使用优酷会员登录' : '🔑 Parents: tap to use your Youku sign-in here';
+      bar.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:2147483647;padding:8px 14px;border:0;border-radius:999px;background:#1f8cff;color:#fff;font:600 13px/1.3 -apple-system,system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.35);cursor:pointer;max-width:92%';
+      bar.onclick = (e) => {
+        e.stopPropagation();
+        document.requestStorageAccess().then(
+          () => location.reload(),
+          () => {
+            bar.textContent = zh ? '浏览器没有允许。请先在本浏览器直接打开 youku.com 登录一次，再回来点这里' : "The browser didn't allow it. Open youku.com in this browser and sign in once, then tap here again";
+          },
+        );
+      };
+      (document.body || document.documentElement).appendChild(bar);
+    }).catch(() => {});
+  }
 })();

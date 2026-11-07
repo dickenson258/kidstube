@@ -20,7 +20,7 @@ function load() {
   const base = {
     videos: [],
     groups: DICT[browserLang].defaultGroups.slice(),
-    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true, biliNative: true, sandboxSites: { youtube: true } },
+    settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true, biliNative: true, sandboxSites: { youtube: true, youku: true }, sandboxYoukuDefault: 1 },
     usage: { date: today(), sec: 0, bonus: 0 },
   };
   try {
@@ -354,8 +354,10 @@ const SANDBOX_SITES = ['youtube', 'bilibili', 'qq', 'youku', 'ixigua', 'vimeo', 
 function sandboxOn(platform) {
   const s = db.settings;
   if (!s.sandboxSites) s.sandboxSites = s.sandbox ? Object.fromEntries(SANDBOX_SITES.map((p) => [p, true])) : { youtube: true };
+  // 优酷底部控制栏里的标志 / "去优酷"等按钮会跳出去，所以优酷也默认开启（老用户迁移一次）
+  if (!s.sandboxYoukuDefault) { s.sandboxSites.youku = true; s.sandboxYoukuDefault = 1; save(); }
   const key = SANDBOX_SITES.includes(platform) ? platform : 'other';
-  return s.sandboxSites[key] ?? key === 'youtube';
+  return s.sandboxSites[key] ?? (key === 'youtube' || key === 'youku');
 }
 function mountIframe(box, v, onEnded) {
   const s = db.settings;
@@ -363,8 +365,8 @@ function mountIframe(box, v, onEnded) {
   // 都无法打开新页面或跳转，点击没有反应。YouTube 在沙箱里能正常播放，所以始终开启；其他网站按设置
   const sandboxed = sandboxOn(v.platform);
   // 有沙箱时外链本来就打不开，不再加透明遮挡（否则会挡住 YouTube 卡片列表的关闭按钮等正常操作）
-  box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-      referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation"' : ''}></iframe>
+  box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture; storage-access"
+      referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation allow-storage-access-by-user-activation"' : ''}></iframe>
     ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}`;
   if (v.platform === 'youtube') return watchYouTube(box, onEnded);
 }
@@ -810,46 +812,116 @@ function showCreator(out, url, data) {
   draw();
 }
 
+// 通用确认弹窗：返回 true / false；extra 是额外按钮 [{ text, onClick }]（点了不关闭弹窗）
+function confirmBox({ title, body, ok, danger = true, extra = [] }) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; close(); resolve(v); } };
+    const close = modal(`<h2>${title}</h2><p class="confirm-body">${body}</p>
+      ${extra.length ? `<div class="row confirm-extra">${extra.map((x, i) => `<button class="btn" data-x="${i}">${x.text}</button>`).join('')}</div>` : ''}
+      <div class="row confirm-acts"><button class="btn" data-a="no">${t('cancel')}</button><button class="btn ${danger ? 'danger-solid' : 'primary'}" data-a="yes">${ok}</button></div>`, (dlg) => {
+      dlg.onclick = (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.x != null) return extra[b.dataset.x].onClick();
+        finish(b.dataset.a === 'yes');
+      };
+    });
+    // 点遮罩关闭也算取消
+    const mask = $('#modal-root .mask');
+    mask?.addEventListener('click', (e) => e.target === mask && finish(false));
+  });
+}
+function exportBackup() {
+  const blob = new Blob([JSON.stringify({ app: 'KidsTube', version: 1, groups: db.groups, videos: db.videos }, null, 2)], { type: 'application/json' });
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `kidstube-backup-${today()}.json` });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 let libGroup = ALL, libCreator = ALL;
 function paneLibrary(el) {
   let q = '';
+  const sel = new Set(); // 勾选的视频 id
   const drawCreators = () => {
+    // 博主列表和数量都按当前视频库实时计算：删光的博主自动消失
     const cs = creatorsOf(db.videos.filter((v) => libGroup === ALL || v.group === libGroup));
     if (libCreator !== ALL && !cs.some((c) => c.key === libCreator)) libCreator = ALL;
     $('#lc').innerHTML = `<option value="${ALL}">${t('allCreators')}</option>` + cs.map((c) => `<option value="${esc(c.key)}" ${c.key === libCreator ? 'selected' : ''}>${esc(c.name)} (${c.count})</option>`).join('');
   };
+  const drawGroups = () => {
+    // 分组保留（空分组显示 0），只更新数量
+    const n = (g) => db.videos.filter((v) => v.group === g).length;
+    $('#lg').innerHTML = `<option value="${ALL}">${t('allGroups')}</option>` + db.groups.map((g) => `<option value="${esc(g)}" ${g === libGroup ? 'selected' : ''}>${esc(g)} (${n(g)})</option>`).join('');
+  };
+  const filtered = () => db.videos
+    .filter((v) => libGroup === ALL || v.group === libGroup)
+    .filter((v) => libCreator === ALL || creatorKey(v) === libCreator)
+    .filter((v) => !q || (v.title + v.author + v.group).toLowerCase().includes(q));
+  const drawBulk = () => {
+    const shown = filtered();
+    $('#selall').textContent = t('selectShown', shown.length);
+    $('#selall').disabled = !shown.length;
+    $('#selnone').disabled = !sel.size;
+    $('#delsel').textContent = t('delSelected', sel.size);
+    $('#delsel').disabled = !sel.size;
+    $('#delall').disabled = !db.videos.length;
+  };
   const draw = () => {
-    const list = db.videos
-      .filter((v) => libGroup === ALL || v.group === libGroup)
-      .filter((v) => libCreator === ALL || creatorKey(v) === libCreator)
-      .filter((v) => !q || (v.title + v.author + v.group).toLowerCase().includes(q));
-    $('#libbody').innerHTML = list.map((v) => `<tr data-id="${v.id}">
-      <td style="width:120px">${v.thumb ? `<img src="${esc(v.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt="">` : ''}</td>
+    const list = filtered();
+    $('#libbody').innerHTML = list.map((v) => `<tr data-id="${v.id}" class="${sel.has(v.id) ? 'on' : ''}">
+      <td class="thumb-cell" style="width:120px"><label class="chk" title="${t('select')}"><input type="checkbox" data-sel ${sel.has(v.id) ? 'checked' : ''}></label>${v.thumb ? `<img src="${esc(v.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt="">` : ''}</td>
       <td><div class="t" contenteditable="true" data-f="title" title="${t('editTitle')}">${esc(v.title)}</div>
         <div class="s">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · ${esc(v.series.title)} ${t('epOfN', epNo(v), seriesEps(v.series.id).length)}` : ''} · <a href="${esc(v.url)}" target="_blank" rel="noopener">${t('original')}</a></div></td>
       <td><select data-f="group">${db.groups.map((g) => `<option ${g === v.group ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td>
       <td class="acts">${canHaveCreator(v) ? `<button class="btn small" data-more>${t('moreFromCreator')}</button>` : ''}<button class="btn danger small" data-del>${t('del')}</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">${t('noVideos')}</td></tr>`;
+    drawBulk();
   };
-  el.innerHTML = `<div class="panel"><h2>${t('libTitle')} <span class="badge">${t('libCount', db.videos.length)}</span></h2>
+  // 视频库有变化（删除 / 改分组）后：总数、分组数量、博主列表、列表、批量按钮全部重新计算
+  const refresh = () => {
+    for (const id of [...sel]) if (!db.videos.some((v) => v.id === id)) sel.delete(id);
+    $('#libcnt').textContent = t('libCount', db.videos.length);
+    drawGroups();
+    drawCreators();
+    draw();
+  };
+  const removeIds = (ids) => {
+    const set = new Set(ids);
+    const before = db.videos.length;
+    db.videos = db.videos.filter((x) => !set.has(x.id));
+    save();
+    refresh();
+    return before - db.videos.length;
+  };
+  el.innerHTML = `<div class="panel"><h2>${t('libTitle')} <span class="badge" id="libcnt"></span></h2>
     <p class="hint">${t('libHint')}</p>
     <div class="row" style="margin-bottom:10px">
-      <select class="field" id="lg" style="width:auto"><option value="${ALL}">${t('allGroups')}</option>${db.groups.map((g) => `<option ${g === libGroup ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>
+      <select class="field" id="lg" style="width:auto"></select>
       <select class="field" id="lc" style="width:auto"></select>
       <input class="field grow" id="lq" placeholder="${t('libSearch')}">
       <button class="btn small" id="newg">${t('manageGroups')}</button><button class="btn danger small" id="delall">${t('clearAll')}</button></div>
+    <div class="row bulk" style="margin-bottom:6px">
+      <button class="btn small" id="selall"></button><button class="btn small" id="selnone">${t('selectNone')}</button>
+      <div class="spacer"></div><button class="btn danger-solid small" id="delsel"></button></div>
     <div class="table-wrap"><table class="lib"><tbody id="libbody"></tbody></table></div></div>`;
   if (libGroup !== ALL && !db.groups.includes(libGroup)) libGroup = ALL;
-  drawCreators();
-  draw();
+  refresh();
   $('#lg').onchange = (e) => { libGroup = e.target.value; libCreator = ALL; drawCreators(); draw(); };
   $('#lc').onchange = (e) => { libCreator = e.target.value; draw(); };
   const byRow = (e) => db.videos.find((x) => x.id === e.target.closest('tr')?.dataset.id);
   $('#lq').oninput = (e) => { q = e.target.value.trim().toLowerCase(); draw(); };
   $('#libbody').addEventListener('change', (e) => {
+    if (e.target.matches('[data-sel]')) {
+      const id = e.target.closest('tr').dataset.id;
+      e.target.checked ? sel.add(id) : sel.delete(id);
+      e.target.closest('tr').classList.toggle('on', e.target.checked);
+      return drawBulk();
+    }
     if (e.target.dataset.f !== 'group') return;
     const v = byRow(e);
     v.group = e.target.value;
     save();
+    refresh();
     toast(t('movedTo', v.group));
   });
   $('#libbody').addEventListener('focusout', (e) => {
@@ -860,12 +932,29 @@ function paneLibrary(el) {
   $('#libbody').addEventListener('click', (e) => {
     if (e.target.matches('[data-more]')) return openCreatorOf(byRow(e), e.target);
     if (!e.target.matches('[data-del]')) return;
-    const id = e.target.closest('tr').dataset.id;
-    db.videos = db.videos.filter((x) => x.id !== id);
-    save();
-    draw();
+    removeIds([e.target.closest('tr').dataset.id]);
   });
-  $('#delall').onclick = () => { if (confirm(t('clearConfirm'))) { db.videos = []; save(); draw(); } };
+  // 全选只选当前筛选结果（分组 + 博主 + 搜索）
+  $('#selall').onclick = () => { filtered().forEach((v) => sel.add(v.id)); draw(); };
+  $('#selnone').onclick = () => { sel.clear(); draw(); };
+  $('#delsel').onclick = async () => {
+    const n = sel.size;
+    if (!n || !(await confirmBox({ title: t('delSelTitle', n), body: t('delSelBody'), ok: t('delSelOk', n) }))) return;
+    toast(t('deletedN', removeIds([...sel])));
+  };
+  $('#delall').onclick = async () => {
+    const n = db.videos.length, m = filtered().length;
+    if (!n) return;
+    const ok = await confirmBox({
+      title: t('clearTitle'),
+      body: t('clearBody', n, m),
+      ok: t('clearOk', n),
+      extra: [{ text: t('clearBackup'), onClick: () => { exportBackup(); toast(t('backupDone')); } }],
+    });
+    if (!ok) return;
+    sel.clear();
+    toast(t('deletedN', removeIds(db.videos.map((v) => v.id))));
+  };
   $('#newg').onclick = () => {
     const txt = prompt(t('groupsPrompt'), db.groups.join(db.settings.lang === 'zh' ? '，' : ', '));
     if (txt == null) return;
@@ -1076,12 +1165,7 @@ function paneSettings(el) {
     const pin = await pinDialog({ title: t('pinNewTitle'), sub: t('pinNewSub'), mode: 'set' });
     if (pin) { s.pinHash = await sha(pin); save(); toast(t('pinChanged')); }
   };
-  $('#exp').onclick = () => {
-    const blob = new Blob([JSON.stringify({ app: 'KidsTube', version: 1, groups: db.groups, videos: db.videos }, null, 2)], { type: 'application/json' });
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `kidstube-backup-${today()}.json` });
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  $('#exp').onclick = exportBackup;
   $('#imp').onchange = async (e) => {
     try {
       const d = JSON.parse(await e.target.files[0].text());

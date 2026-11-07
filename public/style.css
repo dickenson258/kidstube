@@ -286,3 +286,20 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
   .next-hint { bottom: 44px; left: 8px; right: 8px; padding: 6px 8px; font-size: 13px; }
 }
 .sandbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 12px; margin: 4px 0 14px; }
+
+/* 视频库：勾选 / 批量删除 / 确认弹窗 */
+.btn.danger-solid { background: var(--danger); color: #fff; }
+.lib td.thumb-cell { position: relative; }
+.lib .chk { position: absolute; top: 14px; left: 10px; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,.92); box-shadow: 0 1px 4px rgba(0,0,0,.2); cursor: pointer; }
+.lib .chk input { width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: var(--brand); }
+.lib tr.on td { background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.row.bulk .btn:disabled { opacity: .4; }
+.confirm-body { color: var(--muted); line-height: 1.55; margin: 0 0 16px; }
+.confirm-body b { color: var(--danger); }
+.confirm-extra { justify-content: center; margin-bottom: 12px; }
+.confirm-acts { justify-content: center; }
+@media (max-width: 640px) {
+  .lib .chk { top: 16px; left: 4px; }
+  .lib tr.on { background: color-mix(in srgb, var(--brand) 8%, transparent); border-radius: 12px; }
+  .lib tr.on td { background: none; }
+}
