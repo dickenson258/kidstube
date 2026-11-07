@@ -66,7 +66,7 @@ Security design:
 | Single video from Tencent Video / Youku / Xigua / TikTok / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
 | Vimeo, direct mp4 / m3u8 links | ✅ | ✅ |
 | YouTube channel / playlist import | ✅ requires a YouTube Data API key | ✅ no key needed |
-| Bilibili creator import | ❌ | ✅ |
+| Bilibili channel import | ❌ | ✅ |
 | Short links (b23.tv…) | ❌ open the link and paste the full address | ✅ expanded automatically |
 | Paid Bilibili series (番剧), iQIYI, Mango TV | Opens a window from the original site | Same |
 
@@ -79,8 +79,8 @@ With the helper installed, Bilibili videos play in KidsTube's own player by defa
 - **Kids mode:** shows only videos in the library, with group chips and search. The parent area is protected by a 4-digit PIN.
 - **Collections:** a Bilibili video that belongs to a collection (合集) or has multiple parts (分P) offers "Add whole collection" — no helper needed. Bilibili collection links (`space.bilibili.com/<mid>/lists/<sid>`) and YouTube playlists (`list=`) are supported too. On the kids' home page a collection shows as one card that opens its episode list.
 - **Next episode:** the player always has a "Next episode" button for collections. YouTube and direct video links count down 5 seconds and play the next episode (can be cancelled; can be turned off in Settings). The Bilibili player doesn't report when a video ends, so a "Next episode" prompt appears near the estimated end instead.
-- **Creator folders:** inside each category, videos are automatically grouped into second-level folders by creator (on both the kids' home page and the parent library).
-- **More from this creator:** any video in the library (or a lookup result) can open its creator's page so you can pick more videos to add.
+- **Channel folders:** inside each category, videos are automatically grouped into second-level folders by channel (YouTube channel, Bilibili uploader, etc.) (on both the kids' home page and the parent library).
+- **More from this channel:** any video in the library (or a lookup result) can open its channel page so you can pick more videos to add.
 - **Paste share text:** when the pasted text has extra words around the link (e.g. Bilibili "share" text), the link is extracted automatically and the title is pre-filled.
 - **Stay-in-app lock:** invisible covers over player logos and titles; YouTube recommendations are covered when a video is paused or ends; optional strict sandbox.
 - **Daily watch-time limit:** a parent can add 15 more minutes with the PIN.
@@ -179,8 +179,8 @@ KidsTube 就是 `public/` 文件夹里的静态文件：
 - **孩子模式：** 只显示片单里的视频，有分组标签和搜索。家长区由 4 位 PIN 保护。
 - **合集：** 属于合集或有多个分P的 B站视频，可以"添加整个合集"，不需要助手。也支持 B站合集链接（`space.bilibili.com/<mid>/lists/<sid>`）和 YouTube 播放列表（`list=`）。在孩子首页，一个合集显示为一张卡片，点开是剧集列表。
 - **下一集：** 合集视频的播放器上一直有"下一集"按钮。YouTube 和直链视频会倒数 5 秒后播放下一集（可以取消，也可以在设置里关闭）。B站播放器不会通知视频何时结束，所以会在估算的结束时间附近提示"下一集"。
-- **UP主文件夹：** 每个分类里的视频会按 UP主自动分成二级文件夹（孩子首页和家长片单里都是）。
-- **这个 UP主的更多视频：** 片单里的任何视频（或查询结果）都可以打开它的 UP主页面，挑更多视频加进来。
+- **频道文件夹：** 每个分类里的视频会按频道（YouTube 频道、B站 UP主等）自动分成二级文件夹（孩子首页和家长片单里都是）。
+- **这个频道的更多视频：** 片单里的任何视频（或查询结果）都可以打开它的频道主页，挑更多视频加进来。
 - **粘贴分享文字：** 粘贴的内容里除了链接还有其他文字（比如 B站的"分享"文案）时，会自动提取链接并预填标题。
 - **防跳出：** 透明遮罩盖住播放器的标志和标题；YouTube 视频暂停或结束时盖住推荐；可选的严格沙盒。
 - **每日观看时长限制：** 家长输入 PIN 可以再加 15 分钟。

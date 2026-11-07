@@ -250,7 +250,7 @@ function bindTopbar() {
 // ------------------------------------------------------------ 儿童首页
 let homeGroup = ALL, homeCreator = ALL, homeQuery = '';
 // 博主标识：优先用博主主页地址，没有时用"平台+名字"
-const creatorKey = (v) => v.authorUrl || `${v.platform}:${v.author || ''}`;
+const creatorKey = (v) => (v.authorUrl || `${v.platform}:${v.author || ''}`).toLowerCase(); // YouTube 频道地址大小写不同也算同一个
 function creatorsOf(list) {
   const map = new Map();
   for (const v of list) {
@@ -1276,4 +1276,21 @@ function paneSettings(el) {
   };
 }
 
+// 旧数据补全：YouTube 新版播放列表导入的视频之前没读到频道名，首页按频道分类时看不到。
+// 打开页面时用 oEmbed 补上（每次最多 30 个，逐个请求），补完刷新当前页面
+async function fillYouTubeChannels() {
+  const todo = db.videos.filter((v) => v.platform === 'youtube' && !v.author).slice(0, 30);
+  let n = 0;
+  for (const v of todo) {
+    try {
+      const info = await R.ytInfo(v.vid);
+      if (info.author) { v.author = info.author; v.authorUrl = v.authorUrl || info.authorUrl; n++; }
+    } catch {}
+  }
+  if (!n) return;
+  save();
+  if (!location.hash || location.hash === '#/') route(); // 只刷新首页，不打断播放和家长操作
+}
+
 route();
+fillYouTubeChannels();

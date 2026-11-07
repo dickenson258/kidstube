@@ -187,13 +187,24 @@ async function ytSingle(id) {
     return ytVideo(id);
   }
 }
+// 补全旧数据里缺少的频道名（oEmbed 接口允许网页直接跨域读取，不需要助手）
+export const ytInfo = (id) => ytSingle(id);
 function ytWalk(node, out, conts) {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) return node.forEach((n) => ytWalk(n, out, conts));
   const r = node.playlistVideoRenderer || node.videoRenderer || node.gridVideoRenderer || node.reelItemRenderer;
   if (r?.videoId) out.push(ytVideo(r.videoId, r.title?.runs?.[0]?.text || r.title?.simpleText || r.headline?.simpleText || '', r.shortBylineText?.runs?.[0]?.text || '', r.lengthText?.simpleText || ''));
+  // 新版播放列表 / 频道页（lockupViewModel）：频道名在第一行元数据里，时长在缩略图角标里
   const lv = node.lockupViewModel;
-  if (lv?.contentId && /VIDEO/i.test(lv.contentType || 'VIDEO')) out.push(ytVideo(lv.contentId, lv.metadata?.lockupMetadataViewModel?.title?.content || ''));
+  if (lv?.contentId && /VIDEO/i.test(lv.contentType || 'VIDEO')) {
+    const md = lv.metadata?.lockupMetadataViewModel;
+    const part = md?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0];
+    const chUrl = part?.text?.commandRuns?.[0]?.onTap?.innertubeCommand?.browseEndpoint?.canonicalBaseUrl;
+    const dur = /"text":"(\d+:\d\d(?::\d\d)?)"/.exec(JSON.stringify(lv.contentImage || {}))?.[1] || '';
+    const v = ytVideo(lv.contentId, md?.title?.content || '', chUrl ? part.text.content || '' : '', dur);
+    if (chUrl) v.authorUrl = 'https://www.youtube.com' + chUrl;
+    out.push(v);
+  }
   const sv = node.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId;
   if (sv) out.push(ytVideo(sv, node.shortsLockupViewModel.overlayMetadata?.primaryText?.content || ''));
   if (node.continuationCommand?.token) conts.push(node.continuationCommand.token);
