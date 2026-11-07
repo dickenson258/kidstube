@@ -316,3 +316,5 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 /* 博主视频排序 */
 .chips.sort { margin-top: -4px; }
 .chips.sort .chip { padding: 6px 14px; font-size: 14px; }
+
+.plat-baidupan { background: #06a7ff; }

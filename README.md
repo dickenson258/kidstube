@@ -21,7 +21,7 @@ KidsTube puts one list in front of the child: only the videos the parent added, 
 ## Highlights
 
 - **Whitelist only.** Kids mode shows only videos in the library. The parent area is behind a 4-digit PIN.
-- **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Xigua, Vimeo, direct mp4 / m3u8 links. Import whole collections, playlists or a creator's channel.
+- **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Xigua, Vimeo, direct mp4 / m3u8 links, and videos in your own Baidu Netdisk (with the helper). Import whole collections, playlists, channels or Netdisk folders.
 - **No recommendations or outbound links.** Player logos, titles and end-screen recommendations are covered; an optional per-site sandbox blocks links out of the player. Bilibili videos can play in KidsTube's own player, with no Bilibili recommendations.
 - **Privacy: data never leaves the device.** No server, no account, no analytics. The list and settings live only in the browser (localStorage); move them to another device with a JSON export.
 - **Daily watch-time limit**, automatic next episode, and memberships you already pay for (sign in to each site in the same browser).
@@ -127,7 +127,7 @@ KidsTube 只给孩子一个片单：里面只有家长加进来的视频，不�
 ### 亮点
 
 - **只看白名单。** 孩子模式只显示片单里的视频，家长后台有 4 位密码锁。
-- **一个片单，多个网站。** 支持 YouTube、B站、腾讯视频、优酷、爱奇艺、西瓜视频、Vimeo，以及 mp4 / m3u8 直链。合集、播放列表、UP主频道可以整个导入。
+- **一个片单，多个网站。** 支持 YouTube、B站、腾讯视频、优酷、爱奇艺、西瓜视频、Vimeo、mp4 / m3u8 直链，以及你自己百度网盘里的视频（需要助手）。合集、播放列表、频道、网盘文件夹可以整个导入。
 - **没有推荐，点不出去。** 播放器里的标志、标题和结束推荐都会被遮住；每个网站可以单独开启沙盒，屏蔽播放器里的外链。B站视频可以用 KidsTube 自己的播放器播放，没有 B站推荐。
 - **隐私：数据不离开设备。** 没有服务器、没有账号、没有统计。片单和设置只存在浏览器里（localStorage），换设备用 JSON 导出 / 导入。
 - **每日观看时长限制**、自动播放下一集，已有的会员照常可用（在同一个浏览器里登录各网站即可）。

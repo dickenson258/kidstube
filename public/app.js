@@ -486,6 +486,7 @@ async function mountPlayer(box, v, onEnded) {
     if (src) return mountVideo(box, v, src, onEnded, () => mountIframe(box, v, onEnded));
   }
   if (v.playType === 'iframe') return mountIframe(box, v, onEnded);
+  if (v.playType === 'bdpan') return mountBdpan(box, v, onEnded);
   if (v.playType === 'external') {
     box.innerHTML = `<div class="msg"><div>${ICON.window(48)}</div><div>${t('extNeed')}</div><button class="btn primary" id="ext">${t('extOpen')}</button></div>`;
     $('#ext', box).onclick = () => openExternal(v.url);
@@ -513,7 +514,7 @@ async function mountPlayer(box, v, onEnded) {
 }
 
 // onFail：视频还没开始播放就出错（如地址过期、被拒绝）时调用，用来退回嵌入播放器
-function mountVideo(box, v, src, onEnded, onFail) {
+function mountVideo(box, v, src, onEnded, onFail, { forceHls = false, hlsConfig = {} } = {}) {
   box.innerHTML = `<video controls autoplay playsinline controlslist="nodownload" referrerpolicy="no-referrer" ${v.thumb ? `poster="${esc(v.thumb)}"` : ''}></video>`;
   const video = $('video', box);
   let played = false;
@@ -524,11 +525,12 @@ function mountVideo(box, v, src, onEnded, onFail) {
   video.addEventListener('playing', () => (played = true));
   video.addEventListener('ended', () => onEnded?.());
   if (onFail) video.addEventListener('error', () => { if (!played && box.isConnected) onFail(); });
-  if (/\.m3u8(\?|$)/i.test(src) && !video.canPlayType('application/vnd.apple.mpegurl')) {
+  if (forceHls || (/\.m3u8(\?|$)/i.test(src) && !video.canPlayType('application/vnd.apple.mpegurl'))) {
     let hls = null, gone = false;
     loadScript('https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js').then(() => {
       if (gone) return;
-      hls = new window.Hls();
+      hls = new window.Hls(typeof hlsConfig === 'function' ? hlsConfig(window.Hls) : hlsConfig);
+      if (onFail) hls.on(window.Hls.Events.ERROR, (e, d) => { if (d.fatal && !played && box.isConnected) onFail(d.details); });
       hls.loadSource(src);
       hls.attachMedia(video);
     });
@@ -536,6 +538,45 @@ function mountVideo(box, v, src, onEnded, onFail) {
   }
   video.src = src;
   return () => { video.removeAttribute('src'); video.load(); };
+}
+
+// 百度网盘：助手取播放列表（m3u8），分片也由助手代取（网盘服务器不允许网页直接读取），在 KidsTube 播放器里播放
+async function mountBdpan(box, v, onEnded) {
+  const msg = (html) => (box.innerHTML = `<div class="msg">${html}</div>`);
+  msg(`<div class="spin"></div><div>${t('loading')}</div>`);
+  if (!(await detectHelper(1500))) return msg(`<div>${t('bdpanNeedHelper')}</div>`);
+  let text;
+  try {
+    text = await R.bdpanStream(v.vid, 'M3U8_AUTO_720', (sec) => box.isConnected && sec && msg(`<div class="spin"></div><div>${t('bdpanWait', sec)}</div>`));
+  } catch (e) {
+    if (!box.isConnected) return;
+    return msg(`<div>${esc(errText(e))}</div><a class="btn primary" href="#/parent/accounts">${t('tabAccounts')}</a>`);
+  }
+  if (!box.isConnected) return;
+  const listUrl = URL.createObjectURL(new Blob([text], { type: 'application/vnd.apple.mpegurl' }));
+  const done = mountVideo(box, v, listUrl, onEnded, (why) => msg(`<div>${t('bdpanPlayFail')}</div><div style="opacity:.7;font-size:13px">${esc(why || '')}</div>`), {
+    forceHls: true,
+    hlsConfig: (Hls) => {
+      const Base = Hls.DefaultConfig.loader;
+      class ViaHelper extends Base {
+        load(ctx, cfg, cb) {
+          if (!/(^|\.)baidupcs\.com$/i.test(new URL(ctx.url, location.href).hostname)) return super.load(ctx, cfg, cb);
+          const st = this.stats;
+          st.loading.start = performance.now();
+          let aborted = false;
+          this.abort = () => { aborted = true; st.aborted = true; };
+          R.bdpanFetch(ctx.url).then((data) => {
+            if (aborted) return;
+            st.loading.first = st.loading.end = performance.now();
+            st.loaded = st.total = data.byteLength;
+            cb.onSuccess({ url: ctx.url, data }, st, ctx, null);
+          }, (err) => { if (!aborted) cb.onError({ code: 0, text: String(err?.message || err) }, ctx, null, st); });
+        }
+      }
+      return { loader: ViaHelper, maxBufferLength: 30 };
+    },
+  });
+  return () => { done?.(); URL.revokeObjectURL(listUrl); };
 }
 
 function loadScript(src) {
@@ -756,7 +797,7 @@ function paneAdd(el) {
     <p class="hint">${t('addHint')}</p>
     <div class="row"><input class="field grow" id="url" placeholder="${t('addPlaceholder')}" autocomplete="off">
       <select class="field" id="grp" style="width:auto">${groupOptions(lastGroup || db.groups[0])}</select><button class="btn primary" id="go">${t('parse')}</button></div>
-    <div class="platforms">${['youtube', 'bilibili', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'iqiyi'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span></div>
+    <div class="platforms">${['youtube', 'bilibili', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'iqiyi', 'baidupan'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span></div>
     <div id="helper-tip"></div><div id="result"></div></div>`;
   bindGroupSelect($('#grp'));
   detectHelper().then((v) => {
@@ -1072,6 +1113,7 @@ const LOGINS = [
   // 优酷首页在手机上会换成引导打开 App 的手机版；专门的登录页在手机上也能用账号密码 / 验证码登录
   { key: 'youku', url: 'https://account.youku.com/?callback=' + encodeURIComponent('https://www.youku.com/'), color: '#1f8cff' },
   { key: 'iqiyi', url: 'https://www.iqiyi.com/iframe/loginreg', color: '#00be06' },
+  { key: 'baidupan', url: 'https://pan.baidu.com/', color: '#06a7ff' },
 ];
 // 借助手读取本浏览器在各网站的登录状态（只读是否登录和昵称，不读 Cookie）
 const LOGIN_CHECKS = {
@@ -1095,6 +1137,11 @@ const LOGIN_CHECKS = {
     const text = (await helperRequest({ url: 'https://www.youku.com/ku/webvip', timeout: 60000, headers: { 'user-agent': DESKTOP_UA } })).data || '';
     const m = /"userId":"([^"]*)"/.exec(text);
     return m ? { in: !!m[1] } : null;
+  },
+  // 百度网盘：登录状态接口，未登录时 errno -6
+  baidupan: async () => {
+    const j = JSON.parse((await helperRequest({ url: 'https://pan.baidu.com/api/loginStatus?clienttype=0&web=1', headers: { referer: 'https://pan.baidu.com/disk/main' } })).data);
+    return j.errno === 0 ? { in: true, name: j.login_info?.username } : j.errno === -6 ? { in: false } : null;
   },
   // 爱奇艺：会员成长值接口，未登录时 code Q00304（"用户未登录"）
   iqiyi: async () => {
@@ -1292,5 +1339,19 @@ async function fillYouTubeChannels() {
   if (!location.hash || location.hash === '#/') route(); // 只刷新首页，不打断播放和家长操作
 }
 
+// 百度网盘的封面地址几小时后过期：装了助手时，每次打开页面按文件夹重新取一次（最多 10 个文件夹）
+async function refreshBdpanThumbs() {
+  const vids = db.videos.filter((v) => v.platform === 'baidupan');
+  if (!vids.length || !(await detectHelper(3000))) return;
+  const dirs = [...new Set(vids.map((v) => v.vid.replace(/\/[^/]*$/, '') || '/'))].slice(0, 10);
+  const thumbs = await R.bdpanThumbs(dirs);
+  let n = 0;
+  vids.forEach((v) => { const th = thumbs.get(v.vid); if (th && th !== v.thumb) { v.thumb = th; n++; } });
+  if (!n) return;
+  save();
+  if (!location.hash || location.hash === '#/') route();
+}
+
 route();
 fillYouTubeChannels();
+refreshBdpanThumbs();

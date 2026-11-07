@@ -621,6 +621,91 @@ async function otherSingle(u) {
 }
 
 // ---------------------------------------------------------------- 统一入口
+// ---------------------------------------------------------------- 百度网盘（自己网盘里的视频，需要助手）
+// 粘贴网盘网页版的文件夹地址（地址栏里带 path=）或视频播放页地址；文件夹会像频道一样列出里面的视频。
+// 请求都由助手带着本浏览器里的网盘登录状态发出；播放地址每次播放时重新获取（几小时后会过期）。
+const BDPAN = 'https://pan.baidu.com';
+const BDPAN_REF = { referer: 'https://pan.baidu.com/disk/main' };
+const VIDEO_EXT = /\.(mp4|m4v|mkv|mov|avi|flv|f4v|ts|m2ts|wmv|rmvb|rm|webm|3gp|mpg|mpeg|vob)$/i;
+const bdCollator = new Intl.Collator(['zh-Hans-CN', 'en'], { numeric: true, sensitivity: 'base' });
+export const isBdpan = (u) => /(^|\.)(pan|yun)\.baidu\.com$/i.test(u.hostname);
+function bdpanPath(u) {
+  if (/^\/(s\/|share\/)/.test(u.pathname)) throw fail('BDPAN_SHARE');
+  const hashQuery = new URLSearchParams((u.hash.split('?')[1] || ''));
+  const p = u.searchParams.get('path') || hashQuery.get('path') || hashQuery.get('dir') || u.searchParams.get('dir');
+  if (!p) throw fail('BDPAN_PATH');
+  return p.startsWith('/') ? p : '/' + p;
+}
+const bdDir = (path) => path.replace(/\/[^/]*$/, '') || '/';
+const bdName = (path) => path.split('/').filter(Boolean).pop() || '网盘';
+export const bdpanFolderUrl = (dir) => `${BDPAN}/disk/main#/index?category=all&path=${encodeURIComponent(dir)}`;
+async function bdApi(path) {
+  const j = await getJson(BDPAN + path, { headers: BDPAN_REF });
+  if (j.errno === -6) throw fail('BDPAN_LOGIN');
+  return j;
+}
+async function bdList(dir) {
+  const all = [];
+  for (let page = 1; page <= 10; page++) {
+    const j = await bdApi(`/api/list?dir=${encodeURIComponent(dir)}&num=1000&page=${page}&order=name&desc=0&web=1&clienttype=0&app_id=250528`);
+    if (j.errno === -9) throw fail('BDPAN_NOT_FOUND', dir);
+    if (j.errno !== 0) throw fail('BDPAN_API', String(j.errno));
+    all.push(...(j.list || []));
+    if (!j.list || j.list.length < 1000) break;
+  }
+  return all;
+}
+const bdVideo = (f, dir) => ({
+  platform: 'baidupan', playType: 'bdpan', vid: f.path,
+  url: `${BDPAN}/pfile/video?path=${encodeURIComponent(f.path)}`,
+  title: f.server_filename.replace(VIDEO_EXT, ''), author: bdName(dir), authorUrl: bdpanFolderUrl(dir),
+  thumb: f.thumbs?.url3 || f.thumbs?.url2 || f.thumbs?.url1 || '', duration: f.duration ? fmtDur(f.duration) : '',
+});
+const isVid = (f) => !f.isdir && (f.category === 1 || VIDEO_EXT.test(f.server_filename || ''));
+async function bdpanResolve(u) {
+  if (!transport) throw fail('NEED_HELPER_BDPAN');
+  const path = bdpanPath(u);
+  if (VIDEO_EXT.test(path)) {
+    const dir = bdDir(path);
+    const items = (await bdList(dir)).filter(isVid).sort((a, b) => bdCollator.compare(a.server_filename, b.server_filename));
+    const f = items.find((x) => x.path === path);
+    if (!f) throw fail('BDPAN_NOT_FOUND', path);
+    const videos = items.map((x) => bdVideo(x, dir));
+    const video = videos.find((v) => v.vid === path);
+    return { kind: 'video', video, collection: videos.length > 1 ? { id: 'bdpan:' + dir, title: bdName(dir), videos } : undefined };
+  }
+  const list = await bdList(path);
+  const videos = list.filter(isVid).sort((a, b) => bdCollator.compare(a.server_filename, b.server_filename)).map((f) => bdVideo(f, path));
+  if (!videos.length) throw fail('BDPAN_EMPTY', bdName(path));
+  return { kind: 'creator', author: bdName(path), total: videos.length, videos, next: null, collection: { id: 'bdpan:' + path, title: bdName(path) } };
+}
+// 播放：取 HLS 播放列表（m3u8 文本）。非会员第一次请求可能要求先"看广告"（errno 133），按要求等待后带上 adToken 再取
+export async function bdpanStream(path, quality = 'M3U8_AUTO_720', onWait) {
+  if (!transport) throw fail('NEED_HELPER_BDPAN');
+  let adToken = '';
+  for (let i = 0; i < 4; i++) {
+    const { text } = await getText(`${BDPAN}/api/streaming?path=${encodeURIComponent(path)}&app_id=250528&clienttype=0&type=${quality}&vip=0&web=1${adToken ? '&adToken=' + encodeURIComponent(adToken) : ''}`, { headers: BDPAN_REF });
+    if (text.startsWith('#EXTM3U')) return text;
+    let j = {};
+    try { j = JSON.parse(text); } catch {}
+    if (j.errno === -6) throw fail('BDPAN_LOGIN');
+    if (j.errno === 133 && j.adToken) { adToken = j.adToken; const sec = Number(j.adTime) || 0; onWait?.(sec); await new Promise((r) => setTimeout(r, sec * 1000 + 300)); continue; }
+    if (j.errno === 31341 || j.errno === 31024) { onWait?.(3); await new Promise((r) => setTimeout(r, 3000)); continue; } // 正在转码
+    throw fail('BDPAN_STREAM', String(j.errno ?? text.slice(0, 40)));
+  }
+  throw fail('BDPAN_STREAM', 'retry');
+}
+// 播放器取视频分片（百度的分片服务器不允许网页直接读取，经助手代取）
+export const bdpanFetch = (url) => download(url, {});
+// 刷新封面（封面地址也会过期）：每个文件夹列一次
+export async function bdpanThumbs(dirs) {
+  const out = new Map();
+  for (const dir of dirs) {
+    try { for (const f of await bdList(dir)) if (isVid(f) && f.thumbs) out.set(f.path, f.thumbs.url3 || f.thumbs.url2 || f.thumbs.url1); } catch {}
+  }
+  return out;
+}
+
 // 返回 { kind: 'video', video, manual? } 或 { kind: 'creator', author, videos, next, total?, noteCode? }
 export async function resolve({ url, cursor, ytKey }) {
   url = url.trim();
@@ -636,6 +721,7 @@ export async function resolve({ url, cursor, ytKey }) {
     u = new URL((await request(u.href)).url || u.href);
   }
   const h = u.hostname.replace(/^(www|m)\./, '');
+  if (isBdpan(u)) return bdpanResolve(u);
 
   if (isYouTube(u.hostname)) {
     const id = ytVideoId(u);
