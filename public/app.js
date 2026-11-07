@@ -764,8 +764,10 @@ const exists = (v) => db.videos.some((x) => x.platform === v.platform && x.vid =
 // series：{ id, title, indexOf(v) } —— 作为合集加入时按集数排序；已在库里的视频会被补上合集信息
 function addVideos(list, group, series) {
   let n = 0;
+  if (series?.rename) db.videos.forEach((x) => { if (x.series?.id === series.id) x.series.title = series.title; });
   for (const v of list) {
-    const ser = series ? { id: series.id, title: series.title, index: series.indexOf(v) } : undefined;
+    // 添加时填了合集名（rename）就用它；否则同一合集已改过名的，新加入的集沿用库里的名字
+    const ser = series ? { id: series.id, title: series.rename ? series.title : db.videos.find((x) => x.series?.id === series.id)?.series.title || series.title, index: series.indexOf(v) } : undefined;
     const old = db.videos.find((x) => x.platform === v.platform && x.vid === v.vid && (x.page || 1) === (v.page || 1));
     if (old) { if (ser && !old.series) old.series = ser; continue; }
     db.videos.unshift({ ...v, src: v.playType === 'xhs' ? undefined : v.src, id: uid(), group, addedAt: Date.now(), ...(ser ? { series: ser } : {}) });
@@ -888,7 +890,8 @@ function showCreator(out, url, data) {
   if (col) items.forEach((v) => !exists(v) && chosen.add(keyOf(v))); // 合集默认全选
   let next = data.next, loading = false;
   out.innerHTML = `<h3>${col ? ICON.folder(18) + ' ' + esc(t('collectionTitle', col.title)) : esc(t('creatorVideos', data.author))} <span class="badge" id="cnt"></span></h3>
-    ${col ? `<label class="inline" style="margin-bottom:10px"><input type="checkbox" id="as-series" checked> ${t('asSeries')}</label>` : ''}
+    ${col ? `<div class="row series-opts" style="margin-bottom:10px"><label class="inline"><input type="checkbox" id="as-series" checked> ${t('asSeries')}</label>
+      <label class="grow series-name">${t('seriesName')}<input class="field" id="series-name" value="${esc(db.videos.find((x) => x.series?.id === col.id)?.series.title || col.title)}" style="padding:8px 12px"></label></div>` : ''}
     ${data.noteCode ? `<p class="hint">${esc(L().err[data.noteCode] || '')}</p>` : ''}
     ${data.source ? `<p class="hint" style="margin:0 0 8px">${t('listSource')}: ${t('src_' + data.source)}</p>` : ''}
     ${data.partial ? `<div class="warn row" style="margin-bottom:12px"><span class="grow">${t('biliPartial')}</span><button class="btn small" id="refetch">${t('refetchFull')}</button></div>` : ''}
@@ -930,6 +933,7 @@ function showCreator(out, url, data) {
     return true;
   };
   if ($('#refetch')) $('#refetch').onclick = () => $('#go').click();
+  if ($('#as-series')) $('#as-series').onchange = (e) => ($('#series-name').disabled = !e.target.checked);
   $('#picks').onclick = (e) => {
     const p = e.target.closest('.pick');
     if (!p || p.classList.contains('added')) return;
@@ -952,7 +956,7 @@ function showCreator(out, url, data) {
     const picked = items.filter((v) => chosen.has(keyOf(v)));
     // 作为合集加入：已在库里的同合集视频也一起补上合集信息（便于连续播放）
     const n = addVideos(asSeries ? items.filter((v) => chosen.has(keyOf(v)) || exists(v)) : picked, lastGroup,
-      asSeries ? { id: col.id, title: col.title, indexOf: (v) => items.indexOf(v) } : undefined);
+      asSeries ? { id: col.id, title: $('#series-name')?.value.trim() || col.title, rename: true, indexOf: (v) => items.indexOf(v) } : undefined);
     chosen.clear();
     draw();
     toast(t('addedN', n, lastGroup));
@@ -1020,7 +1024,7 @@ function paneLibrary(el) {
     $('#libbody').innerHTML = list.map((v) => `<tr data-id="${v.id}" class="${sel.has(v.id) ? 'on' : ''}">
       <td class="thumb-cell" style="width:120px"><label class="chk" title="${t('select')}"><input type="checkbox" data-sel ${sel.has(v.id) ? 'checked' : ''}></label>${v.thumb ? `<img src="${esc(v.thumb)}" referrerpolicy="no-referrer" loading="lazy" alt="">` : ''}</td>
       <td><div class="t" contenteditable="true" data-f="title" title="${t('editTitle')}">${esc(v.title)}</div>
-        <div class="s">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · ${esc(v.series.title)} ${t('epOfN', epNo(v), seriesEps(v.series.id).length)}` : ''} · <a href="${esc(v.url)}" target="_blank" rel="noopener">${t('original')}</a></div></td>
+        <div class="s">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · <button class="link-btn" data-series="${esc(v.series.id)}" title="${t('renameSeries')}">${ICON.folder(13)} ${esc(v.series.title)} ✎</button> ${t('epOfN', epNo(v), seriesEps(v.series.id).length)}` : ''} · <a href="${esc(v.url)}" target="_blank" rel="noopener">${t('original')}</a></div></td>
       <td><select data-f="group">${db.groups.map((g) => `<option ${g === v.group ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td>
       <td class="acts">${canHaveCreator(v) ? `<button class="btn small" data-more>${t('moreFromCreator')}</button>` : ''}<button class="btn danger small" data-del>${t('del')}</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">${t('noVideos')}</td></tr>`;
     drawBulk();
@@ -1079,6 +1083,18 @@ function paneLibrary(el) {
   });
   $('#libbody').addEventListener('click', (e) => {
     if (e.target.matches('[data-more]')) return openCreatorOf(byRow(e), e.target);
+    // 改合集名：同一合集的所有集一起改，首页合集卡片和播放页都用新名字
+    const sb = e.target.closest('[data-series]');
+    if (sb) {
+      const id = sb.dataset.series;
+      const cur = db.videos.find((x) => x.series?.id === id)?.series.title || '';
+      const name = prompt(t('renameSeriesPrompt'), cur)?.trim();
+      if (!name || name === cur) return;
+      db.videos.forEach((x) => { if (x.series?.id === id) x.series.title = name; });
+      save();
+      refresh();
+      return toast(t('seriesRenamed', name));
+    }
     if (!e.target.matches('[data-del]')) return;
     removeIds([e.target.closest('tr').dataset.id]);
   });
