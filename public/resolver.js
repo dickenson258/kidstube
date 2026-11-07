@@ -634,8 +634,15 @@ function bdpanPath(u) {
   const hashQuery = new URLSearchParams((u.hash.split('?')[1] || ''));
   const p = u.searchParams.get('path') || hashQuery.get('path') || hashQuery.get('dir') || u.searchParams.get('dir');
   if (!p) throw fail('BDPAN_PATH');
+  return bdNorm(p);
+}
+// 网盘手机网页版的地址里，路径会被再编码一次（%2F 原样留下），空格等字符写成 "@20" 这样的形式
+function bdNorm(p) {
+  for (let i = 0; i < 3 && /%[0-9a-f]{2}/i.test(p); i++) { try { p = decodeURIComponent(p); } catch { break; } }
   return p.startsWith('/') ? p : '/' + p;
 }
+// 备选写法：把 "@20" 这类当成转义字符还原（文件名里本来就有 "@" 时不能先这样做，所以只在找不到时再试）
+const bdAtVariant = (p) => (/@[0-9a-f]{2}/i.test(p) ? bdNorm(p.replace(/@([0-9a-f]{2})/gi, '%$1')) : null);
 const bdDir = (path) => path.replace(/\/[^/]*$/, '') || '/';
 const bdName = (path) => path.split('/').filter(Boolean).pop() || '网盘';
 export const bdpanFolderUrl = (dir) => `${BDPAN}/disk/main#/index?category=all&path=${encodeURIComponent(dir)}`;
@@ -665,6 +672,15 @@ const isVid = (f) => !f.isdir && (f.category === 1 || VIDEO_EXT.test(f.server_fi
 async function bdpanResolve(u) {
   if (!transport) throw fail('NEED_HELPER_BDPAN');
   const path = bdpanPath(u);
+  try {
+    return await bdpanResolvePath(path);
+  } catch (e) {
+    const alt = e.code === 'BDPAN_NOT_FOUND' && bdAtVariant(path);
+    if (!alt || alt === path) throw e;
+    return bdpanResolvePath(alt);
+  }
+}
+async function bdpanResolvePath(path) {
   if (VIDEO_EXT.test(path)) {
     const dir = bdDir(path);
     const items = (await bdList(dir)).filter(isVid).sort((a, b) => bdCollator.compare(a.server_filename, b.server_filename));
@@ -676,8 +692,12 @@ async function bdpanResolve(u) {
   }
   const list = await bdList(path);
   const videos = list.filter(isVid).sort((a, b) => bdCollator.compare(a.server_filename, b.server_filename)).map((f) => bdVideo(f, path));
-  if (!videos.length) throw fail('BDPAN_EMPTY', bdName(path));
-  return { kind: 'creator', author: bdName(path), total: videos.length, videos, next: null, collection: { id: 'bdpan:' + path, title: bdName(path) } };
+  // 子文件夹：列出来让家长点进去（视频常按字幕版本 / 季分在子文件夹里）
+  const subfolders = list.filter((f) => f.isdir).sort((a, b) => bdCollator.compare(a.server_filename, b.server_filename))
+    .map((f) => ({ name: f.server_filename, url: bdpanFolderUrl(f.path) }));
+  if (!videos.length && !subfolders.length) throw fail('BDPAN_EMPTY', bdName(path));
+  if (!videos.length) return { kind: 'folders', title: bdName(path), subfolders };
+  return { kind: 'creator', author: bdName(path), total: videos.length, videos, next: null, collection: { id: 'bdpan:' + path, title: bdName(path) }, subfolders };
 }
 // 播放：取 HLS 播放列表（m3u8 文本）。非会员第一次请求可能要求先"看广告"（errno 133），按要求等待后带上 adToken 再取
 export async function bdpanStream(path, quality = 'M3U8_AUTO_720', onWait) {

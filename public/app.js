@@ -820,8 +820,18 @@ function paneAdd(el) {
     out.innerHTML = `<div class="row" style="margin-top:20px"><div class="spin dark"></div>${t('parsing')}</div>`;
     try {
       const data = await api({ url });
-      if (data.kind === 'video') showSingle(out, data.video, data.manual && !sharedTitle, sharedTitle, data);
-      else showCreator(out, url, data);
+      // 网盘文件夹里的子文件夹：显示成按钮，点了就打开那个子文件夹
+      const subs = data.subfolders?.length ? `<div class="subfolders"><div class="hint">${t(data.kind === 'folders' ? 'bdpanOnlyFolders' : 'bdpanSubfolders', data.title || data.author || '')}</div>
+        <div class="row">${data.subfolders.map((f) => `<button class="btn small" data-sub="${esc(f.url)}">${ICON.folder(16)} ${esc(f.name)}</button>`).join('')}</div></div>` : '';
+      if (data.kind === 'folders') out.innerHTML = subs;
+      else {
+        const box = document.createElement('div');
+        out.innerHTML = subs;
+        out.appendChild(box); // 先放进页面：showSingle / showCreator 按 id 查找里面的元素
+        if (data.kind === 'video') showSingle(box, data.video, data.manual && !sharedTitle, sharedTitle, data);
+        else showCreator(box, url, data);
+      }
+      out.querySelectorAll('[data-sub]').forEach((b) => (b.onclick = () => { input.value = b.dataset.sub; go(); }));
     } catch (e) {
       out.innerHTML = `<p class="warn" style="margin-top:16px">${t('parseFail')}${esc(errText(e))}</p>`;
     }
