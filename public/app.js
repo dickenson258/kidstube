@@ -2,6 +2,7 @@
 import { DICT } from './i18n.js';
 import * as R from './resolver.js';
 import { detectHelper, onHelper, helperRequest, helperVersion, pingHelper } from './bridge.js';
+import { wrapSourceBuffer } from './h264fix.js';
 
 // 检测到 KidsTube 助手后，跨域请求改由助手发出
 onHelper(() => R.setTransport(helperRequest));
@@ -514,7 +515,7 @@ async function mountPlayer(box, v, onEnded) {
 }
 
 // onFail：视频还没开始播放就出错（如地址过期、被拒绝）时调用，用来退回嵌入播放器
-function mountVideo(box, v, src, onEnded, onFail, { forceHls = false, hlsConfig = {} } = {}) {
+function mountVideo(box, v, src, onEnded, onFail, { forceHls = false, hlsConfig = {}, onHls } = {}) {
   box.innerHTML = `<video controls autoplay playsinline controlslist="nodownload" referrerpolicy="no-referrer" ${v.thumb ? `poster="${esc(v.thumb)}"` : ''}></video>`;
   const video = $('video', box);
   let played = false;
@@ -530,7 +531,20 @@ function mountVideo(box, v, src, onEnded, onFail, { forceHls = false, hlsConfig 
     loadScript('https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js').then(() => {
       if (gone) return;
       hls = new window.Hls(typeof hlsConfig === 'function' ? hlsConfig(window.Hls) : hlsConfig);
-      if (onFail) hls.on(window.Hls.Events.ERROR, (e, d) => { if (d.fatal && !played && box.isConnected) onFail(d.details); });
+      // 已经开始播放后出的严重错误：自动恢复（解码出错就重建解码器，网络出错就重新加载），而不是一直卡住
+      let recovers = 0, lastRecover = 0;
+      hls.on(window.Hls.Events.ERROR, (e, d) => {
+        if (!d.fatal || !box.isConnected) return;
+        if (!played) return onFail?.(d.details);
+        const now = Date.now();
+        if (now - lastRecover > 60000) recovers = 0;
+        if (++recovers > 5) return onFail?.(d.details);
+        lastRecover = now;
+        if (d.type === window.Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        else if (d.type === window.Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad(video.currentTime);
+        else onFail?.(d.details);
+      });
+      onHls?.(hls, window.Hls);
       hls.loadSource(src);
       hls.attachMedia(video);
     });
@@ -575,6 +589,8 @@ async function mountBdpan(box, v, onEnded) {
       }
       return { loader: ViaHelper, maxBufferLength: 30 };
     },
+    // 百度转码视频的 PPS 参数不停变化，苹果设备解码会花屏、卡住：送进解码器前统一参数
+    onHls: (hls, Hls) => hls.on(Hls.Events.BUFFER_CREATED, (e, d) => wrapSourceBuffer(d.tracks?.video?.buffer)),
   });
   return () => { done?.(); URL.revokeObjectURL(listUrl); };
 }
