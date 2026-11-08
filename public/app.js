@@ -548,7 +548,22 @@ function mountVideo(box, v, src, onEnded, onFail, { forceHls = false, hlsConfig 
       hls.loadSource(src);
       hls.attachMedia(video);
     });
-    return () => { gone = true; hls?.destroy(); };
+    // 卡住看门狗：在播放、前面也有缓冲，但画面 3 秒没动 → 跳过小空隙 / 轻推一下 / 重建解码器
+    let lastT = -1, still = 0, kicks = 0;
+    const dog = setInterval(() => {
+      const t = video.currentTime;
+      if (!hls || !played || video.paused || video.ended || video.seeking || Math.abs(t - lastT) > 0.01) { lastT = t; still = 0; return; }
+      if (++still < 3) return;
+      still = 0;
+      const b = video.buffered;
+      for (let i = 0; i < b.length; i++) if (b.start(i) > t && b.start(i) - t < 3) { video.currentTime = b.start(i) + 0.05; return; }
+      let ahead = false;
+      for (let i = 0; i < b.length; i++) if (b.start(i) <= t + 0.1 && b.end(i) > t + 0.5) ahead = true;
+      if (!ahead) return; // 还在下载，交给 hls.js
+      if (++kicks % 2) video.currentTime = t + 0.1;
+      else { hls.recoverMediaError(); video.currentTime = t + 0.1; video.play().catch(() => {}); }
+    }, 1000);
+    return () => { gone = true; clearInterval(dog); hls?.destroy(); };
   }
   video.src = src;
   return () => { video.removeAttribute('src'); video.load(); };
@@ -567,6 +582,9 @@ async function mountBdpan(box, v, onEnded) {
     return msg(`<div>${esc(errText(e))}</div><a class="btn primary" href="#/parent/accounts">${t('tabAccounts')}</a>`);
   }
   if (!box.isConnected) return;
+  // 百度每 4 分钟（换一个 ts 文件）标一次 DISCONTINUITY，但时间戳其实是连续的。
+  // 留着它 hls.js 会在那里重置并重新初始化解码器，iPad 上就卡在 3:58 左右：去掉
+  text = text.replace(/^#EXT-X-DISCONTINUITY[ \t]*\r?\n/gm, '');
   const listUrl = URL.createObjectURL(new Blob([text], { type: 'application/vnd.apple.mpegurl' }));
   const done = mountVideo(box, v, listUrl, onEnded, (why) => msg(`<div>${t('bdpanPlayFail')}</div><div style="opacity:.7;font-size:13px">${esc(why || '')}</div>`), {
     forceHls: true,
