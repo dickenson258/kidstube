@@ -361,6 +361,14 @@ function renderHome() {
     </main>`;
   bindTopbar();
   $('#guide-parent')?.addEventListener('click', () => $('#parent-btn')?.click());
+  // 已安装，重新检测：先问一下助手；没回应就刷新页面（刚装好的脚本要刷新后才会注入）
+  $('#guide-recheck')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = t('g_checking');
+    if (await detectHelper(1500)) { try { sessionStorage.removeItem('kt-recheck'); } catch {} return route(); }
+    try { sessionStorage.setItem('kt-recheck', '1'); } catch {}
+    location.reload();
+  });
   app.querySelectorAll('.chip[data-g]').forEach((c) => (c.onclick = () => { homeGroup = c.dataset.g; homeCreator = ALL; renderHome(); }));
   app.querySelectorAll('.chip[data-c]').forEach((c) => (c.onclick = () => { homeCreator = c.dataset.c; renderHome(); }));
   app.querySelectorAll('.chip[data-sort]').forEach((c) => (c.onclick = () => { (db.creatorSort ||= {})[homeCreator] = c.dataset.sort; save(); renderHome(); }));
@@ -421,14 +429,16 @@ function welcomeGuide() {
   return `<div class="welcome" data-helper="${ver ? 'on' : 'off'}">
     <div class="big">${ICON.tv(64)}</div><h2>${t('g_title')}</h2><p class="hint">${t('g_intro')}</p>
     <div class="welcome-step"><div class="num">1</div><div class="body"><h3>${t('g_s1')} ${ver ? `<span class="badge ok">${t('helperOn', ver)}</span>` : ''}</h3>
-      <p class="hint">${t('g_s1why')}</p>${ver ? '' : helperGuide()}</div></div>
+      <p class="hint">${t('g_s1why')}</p>${ver ? '' : `${helperGuide()}
+      <div class="row"><button class="btn" id="guide-recheck">${t('helperRecheck')}</button></div>
+      ${(() => { try { return sessionStorage.getItem('kt-recheck'); } catch { return null; } })() ? `<p class="warn" id="guide-notyet">${t('g_notYet')}</p>` : ''}`}</div></div>
     <div class="welcome-step"><div class="num">2</div><div class="body"><h3>${t('g_s2')}</h3><p class="hint">${t('g_s2body')}</p>
       <button class="btn primary" id="guide-parent">${t('g_openParent')}</button></div></div>
     <div class="welcome-step"><div class="num">3</div><div class="body"><h3>${t('g_s3')}</h3><p class="hint">${t('g_s3body')}</p></div></div>
   </div>`;
 }
 // 助手装好后，首页的指引自动更新
-onHelper(() => { if ($('.welcome[data-helper="off"]')) route(); });
+onHelper(() => { try { sessionStorage.removeItem('kt-recheck'); } catch {} if ($('.welcome[data-helper="off"]')) route(); });
 
 function renderSeries(id) {
   const eps = seriesEps(id);
