@@ -357,9 +357,10 @@ function renderHome() {
       ${continueRow(!q && homeGroup === ALL && homeCreator === ALL)}
       ${list.length ? `<div class="grid">${homeCards(list, !q)}</div>`
         : kidVideos().length ? `<div class="empty"><div class="big">${ICON.search(64)}</div><h2>${t('notFound')}</h2></div>`
-        : `<div class="empty"><div class="big">${ICON.tv(72)}</div><h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`}
+        : welcomeGuide()}
     </main>`;
   bindTopbar();
+  $('#guide-parent')?.addEventListener('click', () => $('#parent-btn')?.click());
   app.querySelectorAll('.chip[data-g]').forEach((c) => (c.onclick = () => { homeGroup = c.dataset.g; homeCreator = ALL; renderHome(); }));
   app.querySelectorAll('.chip[data-c]').forEach((c) => (c.onclick = () => { homeCreator = c.dataset.c; renderHome(); }));
   app.querySelectorAll('.chip[data-sort]').forEach((c) => (c.onclick = () => { (db.creatorSort ||= {})[homeCreator] = c.dataset.sort; save(); renderHome(); }));
@@ -373,6 +374,61 @@ function renderHome() {
     n.setSelectionRange(pos, pos);
   };
 }
+
+// ------------------------------------------------------------ 新用户安装指引
+const LINKS = {
+  userscripts: 'https://apps.apple.com/app/userscripts/id1463298887',
+  firefoxPlay: 'https://play.google.com/store/apps/details?id=org.mozilla.firefox',
+  firefoxSite: 'https://www.mozilla.org/firefox/browsers/mobile/android/',
+  tmAndroid: 'https://addons.mozilla.org/android/addon/tampermonkey/',
+  tampermonkey: 'https://www.tampermonkey.net/',
+  script: 'kidstube-helper.user.js',
+};
+function deviceKind() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
+// 某一种设备的安装步骤：每步一句话，需要下载的地方直接给按钮
+function deviceSteps(kind) {
+  const ua = navigator.userAgent, here = kind === deviceKind();
+  const a = (href, label, primary) => `<a class="btn small ${primary ? 'primary' : ''}" href="${href}" target="_blank" rel="noopener">${label}</a>`;
+  const step = (text, ...btns) => `<li><div>${text}</div>${btns.length ? `<div class="guide-btns">${btns.join('')}</div>` : ''}</li>`;
+  let warn = '', steps;
+  if (kind === 'ios') {
+    if (here && /CriOS|FxiOS|EdgiOS|OPiOS|MicroMessenger|QQ\//.test(ua)) warn = t('g_iosNotSafari');
+    steps = [step(t('g_ios1'), a(LINKS.userscripts, t('g_appStore'), true)), step(t('g_ios2')), step(t('g_ios3'), a(LINKS.script, t('helperInstall'), true)), step(t('g_done'))];
+  } else if (kind === 'android') {
+    const ff = here && /Firefox\//.test(ua);
+    if (here && !ff) warn = t('g_androidNotFirefox');
+    steps = [ff ? step(t('g_and1ok')) : step(t('g_and1'), a(LINKS.firefoxPlay, 'Google Play', true), a(LINKS.firefoxSite, t('g_site'))),
+      step(t('g_and2'), a(LINKS.tmAndroid, t('g_addon'), true)), step(t('g_and3'), a(LINKS.script, t('helperInstall'), true)), step(t('g_done'))];
+  } else {
+    steps = [step(t('g_pc1'), a(LINKS.tampermonkey, 'Tampermonkey', true)), step(t('g_pc2'), a(LINKS.script, t('helperInstall'), true)), step(t('g_done'))];
+  }
+  return `${warn ? `<p class="warn">${warn}</p>` : ''}<ol class="guide-steps">${steps.join('')}</ol>`;
+}
+// 安装助手：本设备的步骤展开，其他设备折叠
+function helperGuide() {
+  const me = deviceKind(), others = ['ios', 'android', 'desktop'].filter((k) => k !== me);
+  return `<div class="guide-dev">${t('g_thisDevice', t('dev_' + me))}</div>${deviceSteps(me)}
+    ${others.map((k) => `<details class="guide-other"><summary>${t('g_otherDevice', t('dev_' + k))}</summary>${deviceSteps(k)}</details>`).join('')}`;
+}
+// 首页（还没有视频时）：给家长的 3 步
+function welcomeGuide() {
+  const ver = helperVersion();
+  return `<div class="welcome" data-helper="${ver ? 'on' : 'off'}">
+    <div class="big">${ICON.tv(64)}</div><h2>${t('g_title')}</h2><p class="hint">${t('g_intro')}</p>
+    <div class="welcome-step"><div class="num">1</div><div class="body"><h3>${t('g_s1')} ${ver ? `<span class="badge ok">${t('helperOn', ver)}</span>` : ''}</h3>
+      <p class="hint">${t('g_s1why')}</p>${ver ? '' : helperGuide()}</div></div>
+    <div class="welcome-step"><div class="num">2</div><div class="body"><h3>${t('g_s2')}</h3><p class="hint">${t('g_s2body')}</p>
+      <button class="btn primary" id="guide-parent">${t('g_openParent')}</button></div></div>
+    <div class="welcome-step"><div class="num">3</div><div class="body"><h3>${t('g_s3')}</h3><p class="hint">${t('g_s3body')}</p></div></div>
+  </div>`;
+}
+// 助手装好后，首页的指引自动更新
+onHelper(() => { if ($('.welcome[data-helper="off"]')) route(); });
 
 function renderSeries(id) {
   const eps = seriesEps(id);
@@ -1239,7 +1295,7 @@ function paneAccounts(el) {
     <p class="hint">${t('helperIntro')}</p>
     <div class="row" style="margin-bottom:12px"><a class="btn primary" href="kidstube-helper.user.js" target="_blank" rel="noopener">${t('helperInstall')}</a>
       <button class="btn small" id="recheck">${t('helperRecheck')}</button></div>
-    <div class="steps">${t('helperSteps')}</div>
+    <div class="steps">${helperGuide()}<p class="hint">${t('helperStepsMore')}</p></div>
     <p class="hint">${t('helperPrivacy')}</p>
     <h3>${t('helperTest')}</h3>
     <p class="hint">${t('helperTestHint')}</p>

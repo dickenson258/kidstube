@@ -322,3 +322,20 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--brand); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
 .link-btn:hover { text-decoration: underline; }
 .series-opts { flex-wrap: wrap; align-items: center; gap: 10px; } .series-name { display: flex; align-items: center; gap: 8px; min-width: 220px; font-size: 14px; white-space: nowrap; }
+
+/* 新用户指引 */
+.welcome { max-width: 720px; margin: 24px auto 40px; }
+.welcome > .big { display: flex; justify-content: center; color: var(--brand); }
+.welcome > h2, .welcome > .hint { text-align: center; }
+.welcome-step { display: flex; gap: 14px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; margin-top: 14px; }
+.welcome-step .num { flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.welcome-step .body { flex: 1; min-width: 0; }
+.welcome-step h3 { margin: 4px 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.guide-dev { font-weight: 700; margin: 10px 0 4px; }
+.guide-steps { margin: 0 0 8px; padding-left: 20px; line-height: 1.7; font-size: 14px; }
+.guide-steps li { margin-bottom: 10px; }
+.guide-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.guide-btns .btn { white-space: normal; text-align: center; }
+.guide-other { margin: 6px 0; font-size: 14px; }
+.guide-other summary { cursor: pointer; color: var(--muted); font-weight: 600; padding: 4px 0; }
+@media (max-width: 600px) { .welcome-step { padding: 14px; gap: 10px; } }
