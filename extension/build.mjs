@@ -40,7 +40,9 @@ const targets = {
   firefox: {
     ...base,
     background: { scripts: ['background.js'] },
-    browser_specific_settings: { gecko: { id: 'helper@domibuddy.com', strict_min_version: '128.0', data_collection_permissions: { required: ['none'] } } },
+    browser_specific_settings: {
+      gecko: { id: 'helper@domibuddy.com', strict_min_version: '140.0', data_collection_permissions: { required: ['none'] } },
+    },
   },
 };
 
