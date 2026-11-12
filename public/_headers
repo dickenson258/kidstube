@@ -1,0 +1,9 @@
+# Cloudflare Pages 响应头（GitHub Pages 和本地预览会忽略这个文件）
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+
+/kidstube-helper.user.js
+  Content-Type: text/javascript; charset=utf-8
+  Cache-Control: no-cache
