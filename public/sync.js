@@ -72,7 +72,7 @@ const status = (state, extra = {}) => hooks?.onStatus?.({ state, at: cfg?.at || 
 const queue = (fn) => (busy = busy.then(fn, fn));
 
 export const syncOn = () => !!cfg?.token;
-export const syncInfo = () => (cfg ? { at: cfg.at || null, version: cfg.version || 0, role: cfg.role, deviceId: cfg.deviceId } : null);
+export const syncInfo = () => (cfg ? { at: cfg.at || null, version: cfg.version || 0, role: cfg.role, deviceId: cfg.deviceId, beta: !!cfg.beta, since: cfg.since || null } : null);
 export const isParentDevice = () => cfg?.role === 'parent';
 
 function revoked(wipe) {
@@ -147,7 +147,8 @@ export async function enableSync() {
   const snap = snapshot(hooks.getDb());
   const r = await call('POST', '', { name: deviceName(), ciphertext: await encrypt(snap) }, { auth: false });
   if (r.status !== 200) { cfg = null; derived = null; saveCfg(); throw new Error(r.error || 'HTTP ' + r.status); }
-  Object.assign(cfg, { deviceId: r.deviceId, token: r.token, role: r.role, version: r.version, at: r.updatedAt });
+  Object.assign(cfg, { deviceId: r.deviceId, token: r.token, role: r.role, version: r.version, at: r.updatedAt, beta: !!r.beta, since: r.updatedAt });
+  statusCache = null;
   saveCfg();
   lastPrint = print(snap);
   initSync(hooks);
@@ -240,6 +241,18 @@ export async function recoverWithCode(input) {
   cfg.version = g.version; cfg.at = g.updatedAt; saveCfg();
   lastPrint = print(snapshot(hooks.getDb()));
   initSync(hooks);
+}
+
+// 测试期状态：能否新开同步、剩余名额、站内通知（服务器缓存 60 秒）
+let statusCache = null;
+export async function serviceStatus() {
+  if (statusCache && Date.now() - statusCache.at < 60000) return statusCache.data;
+  try {
+    const r = await fetch(API.replace(/sync\/$/, 'sync-status'), { cache: 'no-store' });
+    const data = r.ok ? await r.json() : null;
+    statusCache = { at: Date.now(), data };
+    return data;
+  } catch { return null; }
 }
 
 export const syncNow = () => queue(() => pull()).then(() => queue(push));

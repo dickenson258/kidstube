@@ -869,8 +869,23 @@ function renderWatch(id) {
 // ------------------------------------------------------------ 家长后台
 const TABS = ['add', 'library', 'accounts', 'settings'];
 const TAB_LABEL = { add: 'tabAdd', library: 'tabLibrary', accounts: 'tabAccounts', settings: 'tabSettings' };
+// 站内通知（例如正式收费前 30 天的提醒）：只在家长管理里显示，每条只显示一次
+function maybeShowNotice() {
+  if (!S.syncOn()) return;
+  S.serviceStatus().then((st) => {
+    const n = st?.notice;
+    if (!n?.id || db.settings.noticeSeen === n.id || !location.hash.startsWith('#/parent')) return;
+    const text = (db.settings.lang === 'zh' ? n.zh : n.en) || n.zh || n.en;
+    if (!text) return;
+    db.settings.noticeSeen = n.id;
+    save();
+    modal(`<h2>${t('noticeTitle')}</h2><p class="confirm-body" style="white-space:pre-line">${esc(text)}</p>
+      <div class="row confirm-acts"><button class="btn primary" data-a="close">${t('noticeOk')}</button></div>`, (dlg, close) => ($('[data-a="close"]', dlg).onclick = close));
+  });
+}
 function renderParent(tab) {
   if (!TABS.includes(tab)) tab = 'add';
+  setTimeout(maybeShowNotice, 500);
   app.innerHTML = `<header class="topbar"><a class="logo" href="#/" aria-label="${esc(t('appName'))}"><img src="icon.svg" alt=""><span>Domi<b>Buddy</b></span><span class="product">${t('product')}</span></a><span class="badge">${t('parentArea')}</span>
       <div class="spacer"></div>${langBtn()}<button class="btn primary" id="exit">${t('exitKids')}</button></header>
     <main class="wrap admin">
@@ -1704,9 +1719,12 @@ function syncStatusText() {
 function syncPanel() {
   if (!S.syncSupported()) return `<div class="panel"><h2>${t('syncTitle')}</h2><p class="hint">${t('syncNeedHttps')}</p></div>`;
   if (!S.syncOn()) return `<div class="panel"><h2>${t('syncTitle')} <span class="badge">${t('syncBeta')}</span></h2>
-    <p class="hint">${t('syncIntro')}</p><div class="row"><button class="btn primary" id="sync-on">${t('syncEnable')}</button><a class="btn" href="#/recover">${t('recoverLink')}</a></div></div>`;
+    <p class="hint">${t('syncIntro')}</p>
+    <div class="beta-rules"><b>${t('betaRulesTitle')}</b><ul>${t('betaRules').map((x) => `<li>${x}</li>`).join('')}</ul></div>
+    <p class="hint" id="sync-seats"></p>
+    <div class="row"><button class="btn primary" id="sync-on">${t('syncEnable')}</button><a class="btn" href="#/recover">${t('recoverLink')}</a></div></div>`;
   const parent = S.isParentDevice();
-  return `<div class="panel"><h2>${t('syncTitle')} <span class="badge ok">${t('syncIsOn')}</span> <span class="badge">${parent ? t('roleParent') : t('roleChild')}</span></h2>
+  return `<div class="panel"><h2>${t('syncTitle')} <span class="badge ok">${t('syncIsOn')}</span> <span class="badge">${parent ? t('roleParent') : t('roleChild')}</span>${S.syncInfo()?.beta ? ` <span class="badge">${t('betaFamily')}</span>` : ''}</h2>
     <p class="hint" id="sync-status">${esc(syncStatusText())}</p>
     ${parent ? `<h3>${t('devTitle')}</h3><div id="sync-devices" class="device-list"><p class="hint">${t('devLoading')}</p></div>` : `<p class="hint">${t('devChildNote')}</p>`}
     <div class="row">${parent ? `<button class="btn primary" id="sync-add">${t('syncAddDevice')}</button><button class="btn" id="sync-rc">${t('rcButton')}</button>` : ''}<button class="btn" id="sync-now">${t('syncNow')}</button>
@@ -1748,13 +1766,24 @@ async function drawDevices(el) {
     });
   }));
 }
+const syncErrText = (m) => ({ beta_full: t('betaFull'), closed: t('betaClosed'), too_many_requests: t('tooMany') })[m] || t('syncErr', m);
 function bindSyncPanel(el) {
   const on = (id, fn) => { const b = $('#' + id, el); if (b) b.onclick = fn; };
   drawDevices(el);
+  if ($('#sync-on', el)) S.serviceStatus().then((st) => {
+    const seats = $('#sync-seats', el), btn = $('#sync-on', el);
+    if (!st || !seats || !btn) return;
+    if (!st.open) {
+      btn.disabled = true;
+      btn.textContent = st.reason === 'beta_full' ? t('betaFullBtn') : t('betaClosedBtn');
+      seats.innerHTML = `${st.reason === 'beta_full' ? t('betaFull') : t('betaClosed')} ${t('betaMeanwhile')}`;
+    } else if (st.remaining != null) seats.textContent = t('betaSeats', st.remaining);
+  });
   on('sync-on', async (e) => {
     e.currentTarget.disabled = true;
     let code;
-    try { code = await S.enableSync(); } catch (err) { toast(t('syncErr', err.message)); e.currentTarget.disabled = false; return; }
+    const btn = e.currentTarget;
+    try { code = await S.enableSync(); } catch (err) { toast(syncErrText(err.message)); btn.disabled = false; return; }
     renderParent('settings');
     if (code) showRecoveryDialog(code, () => showPairDialog());
     else showPairDialog();
