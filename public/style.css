@@ -365,3 +365,15 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .guide-helper > summary { cursor: pointer; color: var(--brand); font-weight: 700; padding: 4px 0; }
 .platforms .plug { font-style: normal; font-size: 11px; margin-left: 3px; }
 .plug-legend { margin: 6px 0 0; font-size: 13px; }
+
+/* 分享片单 / 导入 */
+.share-label { display: grid; gap: 6px; font-weight: 700; margin: 6px 0 12px; }
+.share-qr { display: flex; justify-content: center; }
+.share-qr svg { width: 220px; height: 220px; background: #fff; border-radius: 12px; }
+.share-qr-note { text-align: center; margin: 8px 0 12px; }
+.share-link { width: 100%; font-size: 12px; font-family: ui-monospace, monospace; resize: none; word-break: break-all; }
+.import-head { display: flex; align-items: center; gap: 14px; margin: 8px 0 16px; }
+.import-head h1 { margin: 0; }
+.import-group { display: flex; align-items: center; gap: 8px; font-weight: 700; flex-wrap: wrap; }
+.import-group select { width: auto; flex: 1; min-width: 160px; }
+.card.static { cursor: default; }

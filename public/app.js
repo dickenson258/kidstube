@@ -140,6 +140,7 @@ const ICON = {
   star: (n) => svg('<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>', n),
   folder: (n) => svg('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>', n),
   play: (n) => svg('<path d="M8 5.5v13l10-6.5z"/>', n),
+  share: (n) => svg('<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>', n),
   window: (n) => svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M14 13h4v4"/><path d="m18 13-5 5"/>', n),
 };
 // 朵米（朵米伙伴的品牌角色）：蓝色圆角等边三角、两个小竖椭圆眼睛、细线手脚、不画嘴。
@@ -244,6 +245,7 @@ function route() {
   const [, page, arg] = location.hash.split('/');
   if (page === 'watch') return renderWatch(arg);
   if (page === 'series') return renderSeries(decodeURIComponent(arg || ''));
+  if (page === 'import') return renderImport(arg);
   if (page === 'parent') {
     if (!parentUnlocked) {
       location.hash = '#/';
@@ -1179,6 +1181,158 @@ function exportBackup() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// ------------------------------------------------------------ 分享片单
+// 片单（视频编号、标题、封面、合集结构）压缩后直接放进链接：打开链接就能预览、导入、播放，不需要助手，也不经过服务器。
+// 百度网盘是家长自己网盘里的文件，不能分享；小红书 / 抖音已不再支持。
+const shareable = (v) => !['baidupan', 'xiaohongshu', 'douyin'].includes(v.platform) && !['bdpan', 'xhs'].includes(v.playType);
+function packVideo(v, slim) {
+  const o = { p: v.platform, v: v.vid };
+  if (v.page) o.pg = v.page;
+  if (v.playType && v.playType !== 'iframe') o.pt = v.playType;
+  if (v.title) o.t = v.title;
+  if (v.duration) o.d = v.duration;
+  if (!['youtube', 'bilibili'].includes(v.platform) && v.url) o.u = v.url;
+  if (v.embed) o.e = v.embed;
+  if (v.src) o.s = v.src;
+  if (v.series) o.sr = [v.series.id, v.series.title, v.series.index];
+  if (!slim) {
+    if (v.author) o.a = v.author;
+    if (v.authorUrl) o.au = v.authorUrl;
+    if (v.thumb && v.platform !== 'youtube') o.th = v.thumb;
+  }
+  return o;
+}
+function unpackVideo(o) {
+  const v = { platform: o.p, vid: o.v, playType: o.pt || 'iframe', title: o.t || '', author: o.a || '', duration: o.d || '', thumb: o.th || '' };
+  if (o.pg) v.page = o.pg;
+  if (o.e) v.embed = o.e;
+  if (o.s) v.src = o.s;
+  if (o.au) v.authorUrl = o.au;
+  if (o.sr) v.series = { id: o.sr[0], title: o.sr[1], index: o.sr[2] };
+  if (v.platform === 'youtube') {
+    v.url = `https://www.youtube.com/watch?v=${v.vid}`;
+    v.thumb = `https://i.ytimg.com/vi/${v.vid}/hqdefault.jpg`;
+  } else if (v.platform === 'bilibili' && /^(BV|av)/.test(v.vid)) {
+    v.url = `https://www.bilibili.com/video/${v.vid}${v.page > 1 ? '?p=' + v.page : ''}`;
+  } else v.url = o.u || o.s || '';
+  return v;
+}
+const b64url = (bytes) => btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64url = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+async function pipeBytes(bytes, stream) {
+  const out = new Response(new Blob([bytes]).stream().pipeThrough(stream));
+  return new Uint8Array(await out.arrayBuffer());
+}
+// 格式：'1' + deflate 压缩后的 base64url；浏览器不支持压缩时用 '0' + 未压缩的 base64url
+async function encodeList(list) {
+  const json = new TextEncoder().encode(JSON.stringify(list));
+  if (typeof CompressionStream === 'function') return '1' + b64url(await pipeBytes(json, new CompressionStream('deflate-raw')));
+  return '0' + b64url(json);
+}
+async function decodeList(s) {
+  const raw = unb64url(s.slice(1));
+  const bytes = s[0] === '1' ? await pipeBytes(raw, new DecompressionStream('deflate-raw')) : raw;
+  const d = JSON.parse(new TextDecoder().decode(bytes));
+  if (!Array.isArray(d?.i)) throw new Error('bad list');
+  return { title: String(d.n || '').slice(0, 80), videos: d.i.filter((o) => o && o.p && o.v).map(unpackVideo).filter(shareable) };
+}
+const shareUrl = (code) => `${location.origin}${location.pathname}#/import/${code}`;
+const QR_MAX = 1800; // 再长的二维码手机很难扫出来
+async function qrSvg(text) {
+  await loadScript(new URL('vendor/qrcode.js', location.href).href);
+  const qr = window.qrcode(0, 'L');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
+function shareDialog(videos, defaultTitle) {
+  const ok = videos.filter(shareable);
+  const skipped = videos.length - ok.length;
+  modal(`<h2>${t('shareTitle')}</h2>
+    <p class="hint">${t('shareHint', ok.length)}${skipped ? ' ' + t('shareSkipped', skipped) : ''}</p>
+    <label class="share-label">${t('shareName')}<input class="field" id="sh-name" value="${esc(defaultTitle)}" maxlength="80"></label>
+    <div class="share-qr" id="sh-qr"></div>
+    <p class="hint share-qr-note" id="sh-qrnote"></p>
+    <textarea class="field share-link" id="sh-link" readonly rows="3"></textarea>
+    <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button>${navigator.share ? `<button class="btn" id="sh-native">${t('shareSystem')}</button>` : ''}<button class="btn primary" id="sh-copy">${t('copyLink')}</button></div>`, (dlg, close) => {
+    let link = '';
+    const build = async () => {
+      const n = $('#sh-name', dlg).value.trim() || defaultTitle;
+      link = shareUrl(await encodeList({ n, i: ok.map((v) => packVideo(v)) }));
+      $('#sh-link', dlg).value = link;
+      // 二维码：完整链接太长时去掉封面和频道名（导入后会自动补上封面），还是太长就提示分成几个小片单
+      let qrLink = link.length <= QR_MAX ? link : shareUrl(await encodeList({ n, i: ok.map((v) => packVideo(v, true)) }));
+      if (qrLink.length > QR_MAX) {
+        $('#sh-qr', dlg).innerHTML = '';
+        $('#sh-qrnote', dlg).textContent = t('shareQrTooLong');
+      } else {
+        try { $('#sh-qr', dlg).innerHTML = await qrSvg(qrLink); $('#sh-qrnote', dlg).textContent = t('shareQrHint'); }
+        catch { $('#sh-qr', dlg).innerHTML = ''; $('#sh-qrnote', dlg).textContent = ''; }
+      }
+    };
+    let timer;
+    $('#sh-name', dlg).oninput = () => { clearTimeout(timer); timer = setTimeout(build, 300); };
+    $('[data-a="close"]', dlg).onclick = close;
+    $('#sh-copy', dlg).onclick = async () => {
+      try { await navigator.clipboard.writeText(link); } catch { $('#sh-link', dlg).select(); document.execCommand('copy'); }
+      toast(t('linkCopied'));
+    };
+    if ($('#sh-native', dlg)) $('#sh-native', dlg).onclick = () => navigator.share({ title: $('#sh-name', dlg).value, url: link }).catch(() => {});
+    build();
+  });
+}
+
+// 打开分享链接：预览片单，家长输入密码后导入
+async function renderImport(code) {
+  let list;
+  try { list = await decodeList(code || ''); } catch { list = null; }
+  if (!list || !list.videos.length) {
+    app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${domi('idle', 100, t('domiName'))}</div><h1>${t('importBad')}</h1><a class="btn" href="#/">${t('back')}</a></main>`;
+    return bindTopbar();
+  }
+  const title = list.title || t('sharedList');
+  document.title = title + ' · ' + t('appName');
+  const fresh = list.videos.filter((v) => !exists(v));
+  app.innerHTML = topbar() + `<main class="wrap import">
+    <div class="import-head">${domi('hop', 64, t('domiName'))}<div><h1>${esc(title)}</h1>
+      <p class="hint" style="margin:0">${t('importCount', list.videos.length)}${fresh.length < list.videos.length ? ' · ' + t('importHave', list.videos.length - fresh.length) : ''}</p></div></div>
+    <div class="panel"><div class="row">
+      <label class="grow import-group">${t('importTo')}<select class="field" id="im-group">
+        <option value="__new">${esc(t('newGroupNamed', title))}</option>${db.groups.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join('')}</select></label>
+      <button class="btn primary" id="im-go" ${fresh.length ? '' : 'disabled'}>${fresh.length ? t('importN', fresh.length) : t('importAllHave')}</button></div>
+      <p class="hint" style="margin:10px 0 0">${t('importNote')}</p></div>
+    <div class="grid">${list.videos.map((v) => `<div class="card static"><div class="thumb">${thumbImg(v)}<span class="plat plat-${v.platform}">${esc(platName(v.platform))}</span>${v.duration ? `<span class="dur">${esc(v.duration)}</span>` : ''}</div><div class="body"><div class="title">${esc(v.title || platName(v.platform))}</div><div class="sub">${esc(v.author || '')}</div></div></div>`).join('')}</div>
+  </main>`;
+  bindTopbar();
+  $('#im-go').onclick = async () => {
+    if (!(await unlockParent())) return;
+    let group = $('#im-group').value;
+    if (group === '__new') {
+      group = title;
+      if (!db.groups.includes(group)) db.groups.push(group);
+    }
+    const added = fresh.filter((v) => !exists(v)).map((v) => ({ ...v, id: uid(), group, addedAt: Date.now() }));
+    db.videos.unshift(...added);
+    save();
+    toast(t('importedN', added.length));
+    location.hash = '#/';
+    backfillThumbs(added);
+  };
+}
+// 二维码里的精简片单没有封面：B 站封面通过 JSONP 接口补上（不需要助手）
+async function backfillThumbs(list) {
+  for (const v of list.filter((x) => !x.thumb && x.platform === 'bilibili' && /^(BV|av)/.test(x.vid))) {
+    try {
+      const r = await R.resolve({ url: v.url });
+      const stored = db.videos.find((x) => x.id === v.id);
+      if (stored && r.video?.thumb) { stored.thumb = r.video.thumb; stored.author ||= r.video.author || ''; save(); }
+    } catch {}
+    await new Promise((ok) => setTimeout(ok, 300));
+  }
+  if (!location.hash || location.hash === '#/') route();
+}
+
 let libGroup = ALL, libCreator = ALL;
 function paneLibrary(el) {
   let q = '';
@@ -1239,7 +1393,8 @@ function paneLibrary(el) {
       <select class="field" id="lg" style="width:auto"></select>
       <select class="field" id="lc" style="width:auto"></select>
       <input class="field grow" id="lq" placeholder="${t('libSearch')}">
-      <button class="btn small" id="newg">${t('manageGroups')}</button><button class="btn danger small" id="delall">${t('clearAll')}</button></div>
+      <button class="btn small" id="newg">${t('manageGroups')}</button><button class="btn danger small" id="delall">${t('clearAll')}</button>
+      <button class="btn primary small" id="share">${ICON.share(16)} ${t('shareList')}</button></div>
     <div class="row bulk" style="margin-bottom:6px">
       <button class="btn small" id="selall"></button><button class="btn small" id="selnone">${t('selectNone')}</button>
       <div class="spacer"></div><button class="btn danger-solid small" id="delsel"></button></div>
@@ -1247,6 +1402,13 @@ function paneLibrary(el) {
   if (libGroup !== ALL && !db.groups.includes(libGroup)) libGroup = ALL;
   refresh();
   $('#lg').onchange = (e) => { libGroup = e.target.value; libCreator = ALL; drawCreators(); draw(); };
+  // 分享：勾选了视频就分享勾选的，否则分享当前筛选出来的
+  $('#share').onclick = () => {
+    const list = sel.size ? db.videos.filter((v) => sel.has(v.id)) : filtered();
+    if (!list.length) return toast(t('shareEmpty'));
+    const cname = libCreator !== ALL ? creatorsOf(list).find((c) => c.key === libCreator)?.name : '';
+    shareDialog(list, libGroup !== ALL ? libGroup : cname || t('myList'));
+  };
   $('#lc').onchange = (e) => { libCreator = e.target.value; draw(); };
   const byRow = (e) => db.videos.find((x) => x.id === e.target.closest('tr')?.dataset.id);
   $('#lq').oninput = (e) => { q = e.target.value.trim().toLowerCase(); draw(); };
