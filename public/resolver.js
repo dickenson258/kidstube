@@ -128,6 +128,26 @@ export function extractLink(text = '') {
     .slice(0, 80);
   return { url, title: /https?:/i.test(title) ? '' : title };
 }
+// 一段文字里的所有链接（家长群里转发的片单常是一串链接，每条前面写着标题）：
+// 按链接切成小段，每段交给 extractLink，标题取这条链接和上一条链接之间的文字
+export function extractLinks(text = '') {
+  const s = String(text);
+  const re = new RegExp('https?://' + URL_TAIL + '|(?:^|(?<=[^\\w.@/]))(?:[a-z0-9-]+\\.)+(?:com|cn|tv|be|io|net)/' + URL_TAIL, 'gi');
+  const out = [], seen = new Set();
+  let from = 0;
+  for (const m of s.matchAll(re)) {
+    const end = m.index + m[0].length;
+    // 标题只看这条链接所在的那一行；那一行链接前面没有字，就看上一行（片单的标题行）
+    const lines = s.slice(from, m.index).split(/\r?\n/).map((x) => x.trim());
+    const own = lines.pop() || '', above = lines.filter(Boolean).pop() || '';
+    const r = extractLink((own || (lines.length ? above : '')) + ' ' + m[0]);
+    from = end;
+    if (seen.has(r.url)) continue;
+    seen.add(r.url);
+    out.push(r);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------- 离线识别（不联网，只看链接本身）
 const RULES = [
@@ -311,10 +331,93 @@ async function ytCreatorApi(u, c, ytKey) {
   }
 }
 
+// 既没有 Key 也没有助手：用 YouTube 官方嵌入播放器（IFrame Player API）的 getPlaylist() 读出播放列表里的视频 ID，
+// 再逐个用 oEmbed 取标题（两者都允许网页直接使用）。限制：最多 200 个视频；没有时长；
+// 只支持播放列表链接和 /channel/UC… 频道链接（@用户名 查不到频道 ID）。
+const ytEmbedIds = new Map(); // 播放列表 ID → 视频 ID 列表（翻页时不用再读一次）
+let ytApiReady;
+function ytIframeApi() {
+  if (typeof document === 'undefined') return Promise.reject(fail('NEED_HELPER_OR_KEY'));
+  if (globalThis.YT?.Player) return Promise.resolve(globalThis.YT);
+  return (ytApiReady ||= new Promise((resolve, reject) => {
+    const prev = globalThis.onYouTubeIframeAPIReady;
+    globalThis.onYouTubeIframeAPIReady = () => { prev?.(); resolve(globalThis.YT); };
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.onerror = () => { ytApiReady = null; s.remove(); reject(fail('HTTP', 'www.youtube.com')); };
+    document.head.appendChild(s);
+  }));
+}
+async function ytEmbedPlaylist(listId) {
+  if (ytEmbedIds.has(listId)) return ytEmbedIds.get(listId);
+  const YT = await ytIframeApi();
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:320px;height:180px;opacity:0;pointer-events:none';
+  const el = host.appendChild(document.createElement('div'));
+  document.body.appendChild(host);
+  let player, iv, timer;
+  try {
+    const ids = await new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(fail('HTTP', 'timeout www.youtube.com')), 20000);
+      player = new YT.Player(el, {
+        playerVars: { listType: 'playlist', list: listId, mute: 1, autoplay: 0 },
+        events: {
+          onReady: () => {
+            let n = 0;
+            iv = setInterval(() => {
+              const l = player.getPlaylist?.();
+              if (l?.length) resolve(l);
+              else if (++n > 40) reject(fail('YT_NOT_FOUND'));
+            }, 250);
+          },
+          onError: () => reject(fail('YT_NOT_FOUND')),
+        },
+      });
+    });
+    const uniq = [...new Set(ids)];
+    ytEmbedIds.set(listId, uniq);
+    return uniq;
+  } finally {
+    clearInterval(iv);
+    clearTimeout(timer);
+    try { player?.destroy?.(); } catch {}
+    host.remove();
+  }
+}
+async function ytCreatorEmbed(u, c) {
+  const PAGE = 50;
+  let listId = c?.embed, author = c?.author || '';
+  if (!listId) {
+    const channelId = pick(/^\/channel\/(UC[\w-]{22})/, u.pathname);
+    listId = u.searchParams.get('list') || (channelId && 'UU' + channelId.slice(2));
+    if (!listId) throw fail('NEED_HELPER_OR_KEY');
+  }
+  const ids = await ytEmbedPlaylist(listId);
+  if (!author) {
+    try {
+      const o = await getJson(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/playlist?list=' + listId)}`);
+      author = (listId.startsWith('UU') ? o.author_name : o.title) || o.author_name || '';
+    } catch {}
+  }
+  const from = c?.offset || 0, page = ids.slice(from, from + PAGE);
+  // 私密或已删除的视频 oEmbed 会失败（没有标题），跳过
+  const videos = [];
+  for (let i = 0; i < page.length; i += 8) {
+    const got = await Promise.all(page.slice(i, i + 8).map(ytSingle));
+    videos.push(...got.filter((v) => v.title));
+  }
+  const nextOffset = from + PAGE;
+  return {
+    author: author || 'YouTube', total: ids.length, videos,
+    next: nextOffset < ids.length ? encCursor({ embed: listId, author, offset: nextOffset }) : null,
+    ...(ids.length >= 200 ? { noteCode: 'YT_EMBED_CAP' } : {}),
+  };
+}
+
 // 无 Key（或 Key 失败）：通过助手调用 YouTube 网页内部接口
 async function ytCreatorWeb(u, c) {
   const listId = u.searchParams.get('list');
-  if (!transport) throw fail('NEED_HELPER_OR_KEY');
+  if (!transport || c?.embed) return ytCreatorEmbed(u, c);
   if (c?.token) {
     const r = await ytBrowse({ continuation: c.token });
     if (!c.list) r.videos.forEach((v) => (v.author = c.author));

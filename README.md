@@ -65,7 +65,9 @@ Security design:
 | Single Bilibili video | ✅ title, thumbnail and duration read automatically (via Bilibili's JSONP endpoint) | ✅ |
 | Single video from Tencent Video / Youku / Xigua / TikTok / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
 | Vimeo, direct mp4 / m3u8 links | ✅ | ✅ |
-| YouTube channel / playlist import | ✅ requires a YouTube Data API key | ✅ no key needed |
+| YouTube playlist (`list=`) or `/channel/UC…` import | ✅ first 200 videos, no durations (read through YouTube's embedded player); full list with a YouTube Data API key | ✅ no key needed |
+| YouTube `@handle` channel import | ✅ requires a YouTube Data API key | ✅ no key needed |
+| Several links pasted at once (a shared list) | ✅ each link is looked up as above | ✅ |
 | Bilibili channel import | ❌ | ✅ |
 | Short links (b23.tv…) | ❌ open the link and paste the full address | ✅ expanded automatically |
 | Paid Bilibili series (番剧), iQIYI, Mango TV | Opens a window from the original site | Same |
@@ -165,7 +167,9 @@ KidsTube 就是 `public/` 文件夹里的静态文件：
 | 单个 B站视频 | ✅ 自动读取标题、封面和时长（通过 B站 JSONP 接口） | ✅ |
 | 腾讯视频 / 优酷 / 西瓜视频 / TikTok / Dailymotion 单个视频 | ✅ 可以播放，标题由家长填写 | ✅ 自动读取标题、封面和时长 |
 | Vimeo、mp4 / m3u8 直链 | ✅ | ✅ |
-| 导入 YouTube 频道 / 播放列表 | ✅ 需要 YouTube Data API key | ✅ 不需要 key |
+| 导入 YouTube 播放列表（`list=`）或 `/channel/UC…` 频道 | ✅ 前 200 个视频，不显示时长（通过 YouTube 嵌入播放器读取）；填了 YouTube Data API key 可读取全部 | ✅ 不需要 key |
+| 导入 YouTube `@用户名` 频道 | ✅ 需要 YouTube Data API key | ✅ 不需要 key |
+| 一次粘贴多个链接（片单） | ✅ 每个链接按上面的规则解析 | ✅ |
 | 导入 B站 UP主 | ❌ | ✅ |
 | 短链接（b23.tv 等） | ❌ 打开链接后粘贴完整地址 | ✅ 自动展开 |
 | B站付费番剧、爱奇艺、芒果 TV | 在原网站的窗口中打开 | 同左 |

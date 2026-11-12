@@ -908,15 +908,40 @@ function paneAdd(el) {
   });
   const input = $('#url');
   // 粘贴的分享文案前后常带有文字：自动提取其中的网址，并记下文案里的标题
+  // 一次粘贴多个链接（片单）：输入框是单行的，换行会被浏览器去掉，所以直接读剪贴板里的原文，保留每条链接前面的标题
+  let batch = null;
+  const showFound = () => { $('#result').innerHTML = `<p class="hint" style="margin-top:16px">${t('batchFound', batch.links.length)}</p>`; };
   const tidy = () => {
     const raw = input.value.trim();
+    if (batch && raw === batch.shown) return null;
+    batch = null;
+    const links = R.extractLinks(raw);
+    if (links.length > 1) {
+      batch = { links, shown: links.map((l) => l.url).join(' ') };
+      input.value = batch.shown;
+      showFound();
+      return null;
+    }
     const { url, title } = R.extractLink(raw);
     if (url !== raw) { input.value = url; sharedTitle = title; }
     return url;
   };
-  input.addEventListener('paste', () => setTimeout(tidy, 0));
+  input.addEventListener('paste', (e) => {
+    const text = e.clipboardData?.getData('text') || '';
+    const links = R.extractLinks(text);
+    if (links.length > 1) {
+      e.preventDefault();
+      batch = { links, shown: links.map((l) => l.url).join(' ') };
+      input.value = batch.shown;
+      sharedTitle = '';
+      showFound();
+      return;
+    }
+    setTimeout(tidy, 0);
+  });
   const go = async () => {
     const url = tidy();
+    if (batch) return showBatch($('#result'), batch.links);
     if (!url) return;
     const out = $('#result');
     out.innerHTML = `<div class="row" style="margin-top:20px"><div class="spin dark"></div>${t('parsing')}</div>`;
@@ -941,7 +966,7 @@ function paneAdd(el) {
   $('#go').onclick = go;
   // 注意：onkeydown 处理函数返回 false 会取消按键（导致无法删除文字），所以不能写成 `cond && go()`
   input.onkeydown = (e) => { if (e.key === 'Enter') go(); };
-  input.oninput = () => { if (!input.value) sharedTitle = ''; };
+  input.oninput = () => { if (!input.value) sharedTitle = ''; if (batch && input.value.trim() !== batch.shown) batch = null; };
   if (pendingCreatorUrl) {
     input.value = pendingCreatorUrl;
     pendingCreatorUrl = null;
@@ -980,6 +1005,43 @@ function showSingle(out, v, manual, suggested = '', extra = {}) {
     sharedTitle = '';
   };
 }
+// 片单：逐个解析（同时最多 3 个），单个视频放进勾选列表；频道、合集链接和解析失败的列在下面
+async function showBatch(out, links) {
+  const videos = new Array(links.length), skipped = [];
+  let done = 0, next = 0;
+  const progress = () => { out.innerHTML = `<div class="row" style="margin-top:20px"><div class="spin dark"></div>${t('batchParsing', Math.min(done + 1, links.length), links.length)}</div>`; };
+  progress();
+  const work = async () => {
+    while (next < links.length) {
+      const i = next++, { url, title } = links[i];
+      try {
+        const d = await api({ url });
+        if (d.kind !== 'video') skipped.push({ url, why: t('batchIsList') });
+        else videos[i] = { ...d.video, title: d.video.title || title || `${platName(d.video.platform)} · ${d.video.vid}` };
+      } catch (e) {
+        skipped.push({ url, why: errText(e) });
+      }
+      done++;
+      if (out.isConnected && done < links.length) progress();
+    }
+  };
+  await Promise.all([work(), work(), work()]);
+  if (!out.isConnected) return;
+  const list = videos.filter(Boolean);
+  out.innerHTML = '';
+  if (list.length) {
+    const box = document.createElement('div');
+    out.appendChild(box);
+    showCreator(box, null, { heading: t('batchHeading', list.length), videos: list, next: null, total: list.length, selectAll: true });
+  }
+  if (skipped.length) {
+    const p = document.createElement('div');
+    p.className = 'warn';
+    p.style.marginTop = '16px';
+    p.innerHTML = `${t('batchSkipped', skipped.length)}<ul style="margin:6px 0 0;padding-left:20px">${skipped.map((s) => `<li style="word-break:break-all">${esc(s.url)} — ${esc(s.why)}</li>`).join('')}</ul>`;
+    out.appendChild(p);
+  }
+}
 const canHaveCreator = (v) => !!v.authorUrl || v.platform === 'youtube' || (v.platform === 'bilibili' && /^(BV|av)/.test(v.vid));
 
 function showCreator(out, url, data) {
@@ -987,9 +1049,9 @@ function showCreator(out, url, data) {
   const chosen = new Set();
   const keyOf = (v) => v.vid + (v.page ? '#' + v.page : '');
   const col = data.collection;
-  if (col) items.forEach((v) => !exists(v) && chosen.add(keyOf(v))); // 合集默认全选
+  if (col || data.selectAll) items.forEach((v) => !exists(v) && chosen.add(keyOf(v))); // 合集、片单默认全选
   let next = data.next, loading = false;
-  out.innerHTML = `<h3>${col ? ICON.folder(18) + ' ' + esc(t('collectionTitle', col.title)) : esc(t('creatorVideos', data.author))} <span class="badge" id="cnt"></span></h3>
+  out.innerHTML = `<h3>${col ? ICON.folder(18) + ' ' + esc(t('collectionTitle', col.title)) : esc(data.heading || t('creatorVideos', data.author))} <span class="badge" id="cnt"></span></h3>
     ${col ? `<div class="row series-opts" style="margin-bottom:10px"><label class="inline"><input type="checkbox" id="as-series" checked> ${t('asSeries')}</label>
       <label class="grow series-name">${t('seriesName')}<input class="field" id="series-name" value="${esc(db.videos.find((x) => x.series?.id === col.id)?.series.title || col.title)}" style="padding:8px 12px"></label></div>` : ''}
     ${data.noteCode ? `<p class="hint">${esc(L().err[data.noteCode] || '')}</p>` : ''}
