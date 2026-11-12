@@ -1296,10 +1296,12 @@ function shareDialog(videos, defaultTitle) {
     <textarea class="field share-link" id="sh-link" readonly rows="2"></textarea>
     <p class="hint" id="sh-shortnote" style="margin:6px 0 0"></p>
     <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button><button class="btn" id="sh-poster">${t('posterBtn')}</button>${navigator.share ? `<button class="btn" id="sh-native">${t('shareSystem')}</button>` : ''}<button class="btn primary" id="sh-copy">${t('copyLink')}</button></div>`, (dlg, close) => {
-    let link = '', seq = 0;
+    let link = '', seq = 0, builtFor = null;
+    const name = () => $('#sh-name', dlg).value.trim() || defaultTitle;
     const build = async () => {
       const my = ++seq;
-      const n = $('#sh-name', dlg).value.trim() || defaultTitle;
+      const n = name();
+      builtFor = n;
       const code = await encodeList({ n, i: ok.map((v) => packVideo(v)) });
       // 优先用短链接（微信等聊天软件里能显示标题和封面的预览卡片）；连不上服务器时用长链接
       $('#sh-link', dlg).value = t('shareMaking');
@@ -1318,15 +1320,17 @@ function shareDialog(videos, defaultTitle) {
         catch { $('#sh-qr', dlg).innerHTML = ''; $('#sh-qrnote', dlg).textContent = ''; }
       }
     };
-    let timer;
-    $('#sh-name', dlg).oninput = () => { clearTimeout(timer); timer = setTimeout(build, 800); };
+    // 改名时不马上生成新的短链接（避免每打几个字就生成一个）：复制、发送、生成分享图时如果名字变了再重新生成
+    const fresh = async () => { if (builtFor !== name()) await build(); return link; };
+    $('#sh-name', dlg).oninput = () => { $('#sh-shortnote', dlg).textContent = t('shareRenamed'); };
     $('[data-a="close"]', dlg).onclick = close;
     $('#sh-copy', dlg).onclick = async () => {
+      await fresh();
       try { await navigator.clipboard.writeText(link); } catch { $('#sh-link', dlg).select(); document.execCommand('copy'); }
       toast(t('linkCopied'));
     };
-    if ($('#sh-native', dlg)) $('#sh-native', dlg).onclick = () => navigator.share({ title: $('#sh-name', dlg).value, url: link }).catch(() => {});
-    $('#sh-poster', dlg).onclick = () => link && showPoster(link, $('#sh-name', dlg).value.trim() || defaultTitle, ok.length);
+    if ($('#sh-native', dlg)) $('#sh-native', dlg).onclick = async () => { await fresh(); navigator.share({ title: name(), url: link }).catch(() => {}); };
+    $('#sh-poster', dlg).onclick = async () => { await fresh(); if (link) showPoster(link, name(), ok.length); };
     build();
   });
 }
