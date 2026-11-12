@@ -8,7 +8,9 @@
   <meta name="description" content="朵米片单（DomiBuddy Lists）：家长精选的儿童视频片单，只看家长挑选的视频" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="preload" href="icon.svg" as="image" type="image/svg+xml" />
-  <link rel="stylesheet" href="style.css" />
+  <!-- 样式表不阻塞首屏：先显示下面的内联加载画面，样式表下载完再生效 -->
+  <link rel="preload" href="style.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link rel="stylesheet" href="style.css" /></noscript>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="dns-prefetch" href="https://api.domibuddy.com" />

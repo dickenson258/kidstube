@@ -2021,6 +2021,20 @@ async function refreshBdpanThumbs() {
   if (!location.hash || location.hash === '#/') route();
 }
 
-route();
-fillYouTubeChannels();
-refreshBdpanThumbs();
+// index.html 里样式表是异步加载的：脚本先到时等样式表生效再渲染（最多等 3 秒），避免无样式的闪烁
+function whenStyled() {
+  const ready = () => [...document.styleSheets].some((s) => /style\.css/.test(s.href || ''));
+  if (ready()) return Promise.resolve();
+  return new Promise((ok) => {
+    const link = document.querySelector('link[href*="style.css"]');
+    const done = () => { clearTimeout(timer); ok(); };
+    const timer = setTimeout(done, 3000);
+    link?.addEventListener('load', done, { once: true });
+    if (!link) done();
+  });
+}
+whenStyled().then(() => {
+  route();
+  fillYouTubeChannels();
+  refreshBdpanThumbs();
+});
