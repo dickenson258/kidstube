@@ -45,6 +45,8 @@ function jsonp(url, timeout = 10000) {
     const timer = setTimeout(() => { done(); reject(fail('HTTP', 'timeout ' + new URL(url).host)); }, timeout);
     window[cb] = (d) => { done(); resolve(d); };
     s.onerror = () => { done(); reject(fail('HTTP', 'jsonp ' + new URL(url).host)); };
+    // 不带来源（Referer）：B 站会按来源网站拦截，部分网络下来自 lists.domibuddy.com 的请求会被拒绝
+    s.referrerPolicy = 'no-referrer';
     s.src = url + (url.includes('?') ? '&' : '?') + 'jsonp=jsonp&callback=' + cb;
     document.head.appendChild(s);
   });
