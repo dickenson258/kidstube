@@ -294,7 +294,7 @@ function creatorsOf(list) {
 }
 // ---------- 合集：每个视频可带 series = { id, title, index }
 // 已停止支持的网站（不适合孩子 / 网页版无法观看）：库里旧的视频不在孩子模式里出现，家长可在视频库中删除
-const RETIRED = new Set(['douyin', 'xiaohongshu']);
+const RETIRED = new Set(['douyin', 'xiaohongshu', 'ixigua', 'tiktok']);
 const kidVideos = () => db.videos.filter((v) => !RETIRED.has(v.platform));
 const seriesEps = (id) => kidVideos().filter((x) => x.series?.id === id).sort((a, b) => a.series.index - b.series.index);
 // 博主视频排序（孩子在首页选中博主后切换，按博主分别记住）；合集内部始终按集数
@@ -502,7 +502,7 @@ const SHIELDS = {
 };
 
 // 每个网站单独设置是否用沙箱；默认只有 YouTube 开启（旧版的"全部开启"选项迁移为每个网站都开）
-const SANDBOX_SITES = ['youtube', 'bilibili', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'dailymotion', 'other'];
+const SANDBOX_SITES = ['youtube', 'bilibili', 'qq', 'youku', 'vimeo', 'dailymotion', 'other'];
 function sandboxOn(platform) {
   const s = db.settings;
   if (!s.sandboxSites) s.sandboxSites = s.sandbox ? Object.fromEntries(SANDBOX_SITES.map((p) => [p, true])) : { youtube: true };
@@ -928,7 +928,7 @@ function paneAdd(el) {
     <p class="hint">${t('addHint')}</p>
     <div class="row"><input class="field grow" id="url" placeholder="${t('addPlaceholder')}" autocomplete="off">
       <select class="field" id="grp" style="width:auto">${groupOptions(lastGroup || db.groups[0])}</select><button class="btn primary" id="go">${t('parse')}</button></div>
-    <div class="platforms">${['youtube', 'bilibili', 'vimeo', 'iqiyi'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span>${['qq', 'youku', 'ixigua', 'tiktok', 'baidupan'].map((p) => `<span class="plat-${p}">${esc(platName(p))}<i class="plug" title="${t('plugTip')}">🔌</i></span>`).join('')}</div>
+    <div class="platforms">${['youtube', 'bilibili', 'vimeo', 'iqiyi'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span>${['qq', 'youku', 'baidupan'].map((p) => `<span class="plat-${p}">${esc(platName(p))}<i class="plug" title="${t('plugTip')}">🔌</i></span>`).join('')}</div>
     <p class="hint plug-legend">${t('plugLegend')}</p>
     <div id="helper-tip"></div><div id="result"></div></div>`;
   bindGroupSelect($('#grp'));
@@ -1187,7 +1187,7 @@ function exportBackup() {
 // ------------------------------------------------------------ 分享片单
 // 片单（视频编号、标题、封面、合集结构）压缩后直接放进链接：打开链接就能预览、导入、播放，不需要助手，也不经过服务器。
 // 百度网盘是家长自己网盘里的文件，不能分享；小红书 / 抖音已不再支持。
-const shareable = (v) => !['baidupan', 'xiaohongshu', 'douyin'].includes(v.platform) && !['bdpan', 'xhs'].includes(v.playType);
+const shareable = (v) => !['baidupan', ...RETIRED].includes(v.platform) && !['bdpan', 'xhs'].includes(v.playType);
 function packVideo(v, slim) {
   const o = { p: v.platform, v: v.vid };
   if (v.page) o.pg = v.page;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         朵米助手 / DomiBuddy Helper
 // @namespace    https://kidstube.local/helper
-// @version      1.7.1
+// @version      1.7.2
 // @description  让朵米片单网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets DomiBuddy Lists look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
@@ -28,9 +28,7 @@
 // @connect      iesdouyin.com
 // @connect      qq.com
 // @connect      youku.com
-// @connect      ixigua.com
 // @connect      vimeo.com
-// @connect      tiktok.com
 // @connect      dailymotion.com
 // @connect      iqiyi.com
 // @connect      mgtv.com
@@ -56,8 +54,8 @@
   }
   if (!document.querySelector('meta[name="kidstube-app"]')) return;
 
-  const VERSION = '1.7.0';
-  const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhslink\.cn|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com|baidu\.com|baidupcs\.com)$/i;
+  const VERSION = '1.7.2';
+  const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|xiaohongshu\.com|xhslink\.com|xhslink\.cn|xhscdn\.com|youtube\.com|youtu\.be|googleapis\.com|douyin\.com|iesdouyin\.com|qq\.com|youku\.com|vimeo\.com|dailymotion\.com|iqiyi\.com|mgtv\.com|baidu\.com|baidupcs\.com)$/i;
   const hasGM4 = typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function';
   const xhr = hasGM4 ? GM.xmlHttpRequest.bind(GM) : typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
   const getValue = (k, d) => (typeof GM !== 'undefined' && GM.getValue ? GM.getValue(k, d) : Promise.resolve(GM_getValue(k, d)));

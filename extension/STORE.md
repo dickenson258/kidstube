@@ -27,7 +27,7 @@
 不装助手也能添加 YouTube、B 站单个视频和 YouTube 播放列表。装上朵米助手后还能：
 - 一次导入整个 B 站 UP 主或合集
 - 导入百度网盘文件夹里的视频
-- 自动补全腾讯视频、优酷、西瓜视频等网站的标题和封面
+- 自动补全腾讯视频、优酷的标题和封面
 - 展开 b23.tv 等短链接
 
 隐私：
@@ -42,7 +42,7 @@ DomiBuddy Lists (lists.domibuddy.com) is a kids' video list picked by parents: c
 Single YouTube and Bilibili videos and YouTube playlists work without the helper. With DomiBuddy Helper you can also:
 - import a whole Bilibili channel or collection
 - import videos from a Baidu Netdisk folder
-- fill in titles and thumbnails from Tencent Video, Youku, Xigua and more
+- fill in titles and thumbnails from Tencent Video and Youku
 - expand short links like b23.tv
 
 Privacy:

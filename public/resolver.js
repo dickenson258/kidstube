@@ -155,13 +155,11 @@ const RULES = [
   { re: /dailymotion\.com\/video\/([a-z0-9]+)/i, platform: 'dailymotion', embed: (m) => `https://www.dailymotion.com/embed/video/${m[1]}` },
   { re: /v\.qq\.com\/x\/(?:cover\/[^/]+|page)\/([a-z0-9]{11})\.html/i, platform: 'qq', embed: (m) => `https://v.qq.com/txp/iframe/player.html?vid=${m[1]}` },
   { re: /v\.youku\.com\/v_show\/id_([^.]+)\.html/, platform: 'youku', embed: (m) => `https://player.youku.com/embed/${m[1]}` },
-  { re: /tiktok\.com\/@[^/]+\/video\/(\d+)/, platform: 'tiktok', embed: (m) => `https://www.tiktok.com/player/v1/${m[1]}` },
-  { re: /ixigua\.com\/(\d+)/, platform: 'ixigua', embed: (m) => `https://www.ixigua.com/iframe/${m[1]}?autoplay=0` },
   { re: /iqiyi\.com\/(v_\w+)/, platform: 'iqiyi', embed: null },
   { re: /mgtv\.com\/b\/\d+\/(\d+)/, platform: 'mgtv', embed: null },
 ];
 // 短链接：需要先跟随跳转拿到真实地址（小红书新版分享用 xhslink.cn）
-const SHORT_HOSTS = /^(b23\.tv|bili2233\.cn|xhslink\.com|xhslink\.cn|vm\.tiktok\.com|url\.cn)$/;
+const SHORT_HOSTS = /^(b23\.tv|bili2233\.cn|xhslink\.com|xhslink\.cn|url\.cn)$/;
 const isYouTube = (h) => /(^|\.)youtube\.com$|^youtu\.be$|youtube-nocookie\.com$/.test(h);
 
 function ytVideoId(u) {
@@ -839,6 +837,8 @@ export async function resolve({ url, cursor, ytKey }) {
   if (/(^|\.)(xiaohongshu\.com|xhslink\.com|xhslink\.cn)$/i.test(u.hostname)) throw fail('XHS_UNSUPPORTED');
   // 抖音不适合孩子观看，已不再支持
   if (/(^|\.)(douyin\.com|iesdouyin\.com)$/i.test(u.hostname)) throw fail('DOUYIN_UNSUPPORTED');
+  // 西瓜视频和 TikTok 以短视频为主，暂不支持
+  if (/(^|\.)(ixigua\.com|tiktok\.com)$/i.test(u.hostname)) throw fail('SHORTVIDEO_UNSUPPORTED');
   if (SHORT_HOSTS.test(u.hostname)) {
     if (!transport) throw fail('SHORT_LINK');
     u = new URL((await request(u.href)).url || u.href);

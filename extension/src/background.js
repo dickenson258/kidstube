@@ -2,7 +2,7 @@
 // 只请求下面列出的视频网站，只支持 GET / POST；不保存、不上传任何内容。
 const api = globalThis.browser ?? globalThis.chrome;
 
-const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|youtube\.com|youtu\.be|googleapis\.com|qq\.com|youku\.com|ixigua\.com|vimeo\.com|tiktok\.com|dailymotion\.com|iqiyi\.com|mgtv\.com|baidu\.com|baidupcs\.com)$/i;
+const ALLOWED = /(^|\.)(bilibili\.com|b23\.tv|bili2233\.cn|youtube\.com|youtu\.be|googleapis\.com|qq\.com|youku\.com|vimeo\.com|dailymotion\.com|iqiyi\.com|mgtv\.com|baidu\.com|baidupcs\.com)$/i;
 // fetch 不能自己设置的请求头：用只匹配这一个请求的临时规则（declarativeNetRequest）改写
 const RULE_HEADERS = ['referer', 'origin', 'user-agent'];
 const TAB_NONE = -1; // 扩展后台发出的请求不属于任何标签页

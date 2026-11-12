@@ -15,7 +15,7 @@ const SITES = [
   'https://domibuddy.pages.dev/*', 'https://*.domibuddy.pages.dev/*', 'https://dickenson258.github.io/kidstube/*',
   'http://localhost/*', 'http://127.0.0.1/*',
 ];
-const VIDEO_HOSTS = ['bilibili.com', 'b23.tv', 'bili2233.cn', 'youtube.com', 'youtu.be', 'googleapis.com', 'qq.com', 'youku.com', 'ixigua.com', 'vimeo.com', 'tiktok.com', 'dailymotion.com', 'iqiyi.com', 'mgtv.com', 'baidu.com', 'baidupcs.com']
+const VIDEO_HOSTS = ['bilibili.com', 'b23.tv', 'bili2233.cn', 'youtube.com', 'youtu.be', 'googleapis.com', 'qq.com', 'youku.com', 'vimeo.com', 'dailymotion.com', 'iqiyi.com', 'mgtv.com', 'baidu.com', 'baidupcs.com']
   .flatMap((h) => [`*://${h}/*`, `*://*.${h}/*`]);
 
 const base = {

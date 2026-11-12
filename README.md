@@ -23,7 +23,7 @@ DomiBuddy Lists puts one list in front of the child: only the videos the parent 
 ## Highlights
 
 - **Whitelist only.** Kids mode shows only videos in the library. The parent area is behind a 4-digit PIN.
-- **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Xigua, Vimeo, direct mp4 / m3u8 links, and videos in your own Baidu Netdisk (with the helper). Import whole collections, playlists, channels or Netdisk folders.
+- **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Vimeo, direct mp4 / m3u8 links, and videos in your own Baidu Netdisk (with the helper). Import whole collections, playlists, channels or Netdisk folders.
 - **No recommendations or outbound links.** Player logos, titles and end-screen recommendations are covered; an optional per-site sandbox blocks links out of the player. Bilibili videos can play in DomiBuddy Lists's own player, with no Bilibili recommendations.
 - **Privacy: data never leaves the device.** No server, no account, no analytics. The list and settings live only in the browser (localStorage); move them to another device with a JSON export.
 - **Daily watch-time limit**, automatic next episode, and memberships you already pay for (sign in to each site in the same browser).
@@ -65,7 +65,7 @@ Security design:
 | --- | --- | --- |
 | Single YouTube video | ✅ title and thumbnail read automatically | ✅ |
 | Single Bilibili video | ✅ title, thumbnail and duration read automatically (via Bilibili's JSONP endpoint) | ✅ |
-| Single video from Tencent Video / Youku / Xigua / TikTok / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
+| Single video from Tencent Video / Youku / Dailymotion | ✅ plays; parent enters the title | ✅ title, thumbnail, and duration read automatically |
 | Vimeo, direct mp4 / m3u8 links | ✅ | ✅ |
 | YouTube playlist (`list=`) or `/channel/UC…` import | ✅ first 200 videos, no durations (read through YouTube's embedded player); full list with a YouTube Data API key | ✅ no key needed |
 | YouTube `@handle` channel import | ✅ requires a YouTube Data API key | ✅ no key needed |
@@ -91,7 +91,7 @@ With the helper installed, Bilibili videos play in DomiBuddy Lists's own player 
 - **Memberships / ad-free viewing:** sign in to each site in the same browser. YouTube Premium needs "Use my signed-in account" turned on.
   - Embedded players need third-party cookies allowed. On iPhone this means turning off "Prevent cross-site tracking" in Safari.
 - **Sign-in status:** with the helper installed, 🔒 → Accounts shows whether this browser is signed in to Bilibili, YouTube, Tencent Video, Youku and iQIYI (with the nickname where the site provides one). It re-checks when you come back from the sign-in page.
-- **Xiaohongshu and Douyin:** no longer supported. Xiaohongshu's website doesn't play content, and Douyin isn't a good fit for kids. Their links show an error, and any of their videos already in the library are hidden from kids mode; a parent can delete them in the library.
+- **Xiaohongshu, Douyin, Xigua and TikTok:** no longer supported. Xiaohongshu's website doesn't play content, and Douyin, Xigua and TikTok are mostly short videos, which aren't a good fit for kids. Their links show an error, and any of their videos already in the library are hidden from kids mode; a parent can delete them in the library.
 - **Phones:** responsive layout, add to home screen, and in-page fullscreen fallback on iPhone.
 - **Backup / transfer:** export and import the list as JSON. Since data is stored per browser, this is how you move a list to a child's tablet.
 
@@ -133,7 +133,7 @@ server.js                       Optional local preview server (static files only
 ### 亮点
 
 - **只看白名单。** 孩子模式只显示片单里的视频，家长后台有 4 位密码锁。
-- **一个片单，多个网站。** 支持 YouTube、B站、腾讯视频、优酷、爱奇艺、西瓜视频、Vimeo、mp4 / m3u8 直链，以及你自己百度网盘里的视频（需要助手）。合集、播放列表、频道、网盘文件夹可以整个导入。
+- **一个片单，多个网站。** 支持 YouTube、B站、腾讯视频、优酷、爱奇艺、Vimeo、mp4 / m3u8 直链，以及你自己百度网盘里的视频（需要助手）。合集、播放列表、频道、网盘文件夹可以整个导入。
 - **没有推荐，点不出去。** 播放器里的标志、标题和结束推荐都会被遮住；每个网站可以单独开启沙盒，屏蔽播放器里的外链。B站视频可以用朵米片单自己的播放器播放，没有 B站推荐。
 - **隐私：数据不离开设备。** 没有服务器、没有账号、没有统计。片单和设置只存在浏览器里（localStorage），换设备用 JSON 导出 / 导入。
 - **每日观看时长限制**、自动播放下一集，已有的会员照常可用（在同一个浏览器里登录各网站即可）。
@@ -169,7 +169,7 @@ server.js                       Optional local preview server (static files only
 | --- | --- | --- |
 | 单个 YouTube 视频 | ✅ 自动读取标题和封面 | ✅ |
 | 单个 B站视频 | ✅ 自动读取标题、封面和时长（通过 B站 JSONP 接口） | ✅ |
-| 腾讯视频 / 优酷 / 西瓜视频 / TikTok / Dailymotion 单个视频 | ✅ 可以播放，标题由家长填写 | ✅ 自动读取标题、封面和时长 |
+| 腾讯视频 / 优酷 / Dailymotion 单个视频 | ✅ 可以播放，标题由家长填写 | ✅ 自动读取标题、封面和时长 |
 | Vimeo、mp4 / m3u8 直链 | ✅ | ✅ |
 | 导入 YouTube 播放列表（`list=`）或 `/channel/UC…` 频道 | ✅ 前 200 个视频，不显示时长（通过 YouTube 嵌入播放器读取）；填了 YouTube Data API key 可读取全部 | ✅ 不需要 key |
 | 导入 YouTube `@用户名` 频道 | ✅ 需要 YouTube Data API key | ✅ 不需要 key |
@@ -195,7 +195,7 @@ server.js                       Optional local preview server (static files only
 - **会员 / 免广告观看：** 在同一个浏览器里登录各网站即可。YouTube Premium 需要打开"使用我登录的账号"。
   - 嵌入播放器需要允许第三方 cookie。在 iPhone 上，需要在 Safari 里关闭"阻止跨网站跟踪"。
 - **登录状态：** 装了助手后，🔒 → 账号 页面会显示这个浏览器是否已登录 B站、YouTube、腾讯视频、优酷和爱奇艺（网站提供昵称时也会显示）。从登录页面回来时会自动重新检查。
-- **小红书和抖音：** 已不再支持。小红书网页版无法播放内容，抖音不适合孩子观看。它们的链接会提示错误，片单里已有的这类视频在孩子模式中隐藏，家长可以在片单里删除。
+- **小红书、抖音、西瓜视频和 TikTok：** 已不再支持。小红书网页版无法播放内容，抖音、西瓜视频和 TikTok 以短视频为主，不适合孩子观看。它们的链接会提示错误，片单里已有的这类视频在孩子模式中隐藏，家长可以在片单里删除。
 - **手机：** 响应式布局，可添加到主屏幕，iPhone 上有页面内全屏的兜底方案。
 - **备份 / 迁移：** 片单可以导出、导入 JSON。因为数据按浏览器存储，把片单搬到孩子的平板上就靠这个。
 
