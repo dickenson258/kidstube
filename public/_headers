@@ -7,3 +7,14 @@
 /kidstube-helper.user.js
   Content-Type: text/javascript; charset=utf-8
   Cache-Control: no-cache
+
+# 网页加 no-transform：Cloudflare 不再自动往页面里插入它的统计脚本（static.cloudflareinsights.com），
+# 符合隐私政策"不使用统计/追踪代码"，也少连一个外部域名（国内常常连不上）
+/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/privacy
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/privacy.html
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
