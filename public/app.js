@@ -452,12 +452,12 @@ function welcomeGuide() {
   const ver = helperVersion();
   return `<div class="welcome" data-helper="${ver ? 'on' : 'off'}">
     <div class="big"><div class="domi-say">${t('domiHello')}</div>${domi('wave', 104, t('domiName'))}</div><h2>${t('g_title')}</h2><p class="hint">${t('g_intro')}</p>
-    <div class="welcome-step"><div class="num">1</div><div class="body"><h3>${t('g_s1')} ${ver ? `<span class="badge ok">${t('helperOn', ver)}</span>` : ''}</h3>
-      <p class="hint">${t('g_s1why')}</p>${ver ? '' : `${helperGuide()}
-      <div class="row"><button class="btn" id="guide-recheck">${t('helperRecheck')}</button></div>
-      ${(() => { try { return sessionStorage.getItem('kt-recheck'); } catch { return null; } })() ? `<p class="warn" id="guide-notyet">${t('g_notYet')}</p>` : ''}`}</div></div>
-    <div class="welcome-step"><div class="num">2</div><div class="body"><h3>${t('g_s2')}</h3><p class="hint">${t('g_s2body')}</p>
+    <div class="welcome-step"><div class="num">1</div><div class="body"><h3>${t('g_s2')}</h3><p class="hint">${t('g_s2body')}</p>
       <button class="btn primary" id="guide-parent">${t('g_openParent')}</button></div></div>
+    <div class="welcome-step"><div class="num">2</div><div class="body"><h3>${t('g_s1')} ${ver ? `<span class="badge ok">${t('helperOn', ver)}</span>` : ''}</h3>
+      <p class="hint">${t('g_s1why')}</p>${ver ? '' : `<details class="guide-helper"${(() => { try { return sessionStorage.getItem('kt-recheck') ? ' open' : ''; } catch { return ''; } })()}><summary>${t('g_s1show')}</summary>${helperGuide()}
+      <div class="row"><button class="btn" id="guide-recheck">${t('helperRecheck')}</button></div>
+      ${(() => { try { return sessionStorage.getItem('kt-recheck'); } catch { return null; } })() ? `<p class="warn" id="guide-notyet">${t('g_notYet')}</p>` : ''}</details>`}</div></div>
     <div class="welcome-step"><div class="num">3</div><div class="body"><h3>${t('g_s3')}</h3><p class="hint">${t('g_s3body')}</p></div></div>
   </div>`;
 }
@@ -923,12 +923,14 @@ function paneAdd(el) {
     <p class="hint">${t('addHint')}</p>
     <div class="row"><input class="field grow" id="url" placeholder="${t('addPlaceholder')}" autocomplete="off">
       <select class="field" id="grp" style="width:auto">${groupOptions(lastGroup || db.groups[0])}</select><button class="btn primary" id="go">${t('parse')}</button></div>
-    <div class="platforms">${['youtube', 'bilibili', 'qq', 'youku', 'ixigua', 'vimeo', 'tiktok', 'iqiyi', 'baidupan'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span></div>
+    <div class="platforms">${['youtube', 'bilibili', 'vimeo', 'iqiyi'].map((p) => `<span class="plat-${p}">${esc(platName(p))}</span>`).join('')}<span class="plat-other">${t('directLink')}</span>${['qq', 'youku', 'ixigua', 'tiktok', 'baidupan'].map((p) => `<span class="plat-${p}">${esc(platName(p))}<i class="plug" title="${t('plugTip')}">🔌</i></span>`).join('')}</div>
+    <p class="hint plug-legend">${t('plugLegend')}</p>
     <div id="helper-tip"></div><div id="result"></div></div>`;
   bindGroupSelect($('#grp'));
   detectHelper().then((v) => {
     const tip = $('#helper-tip');
-    if (tip && !v) tip.innerHTML = `<p class="warn" style="margin-top:14px">${t('helperMissingTip')} <a href="#/parent/accounts">${t('helperSetup')}</a></p>`;
+    if (v) document.querySelectorAll('.platforms .plug, .plug-legend').forEach((x) => x.remove());
+    else if (tip) tip.innerHTML = `<p class="hint" style="margin-top:14px">${t('helperMissingTip')} <a href="#/parent/accounts">${t('helperSetup')}</a></p>`;
   });
   const input = $('#url');
   // 粘贴的分享文案前后常带有文字：自动提取其中的网址，并记下文案里的标题

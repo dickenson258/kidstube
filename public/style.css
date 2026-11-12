@@ -361,3 +361,7 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .domi-say { position: relative; background: var(--surface); color: var(--text); font-weight: 700; font-size: 15px; padding: 8px 14px; border-radius: 14px; box-shadow: var(--shadow); margin-bottom: 4px; }
 .domi-say::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 12px; height: 12px; background: var(--surface); transform: translateX(-50%) rotate(45deg); }
 .rest .big { display: flex; justify-content: center; }
+.guide-helper { margin-top: 8px; }
+.guide-helper > summary { cursor: pointer; color: var(--brand); font-weight: 700; padding: 4px 0; }
+.platforms .plug { font-style: normal; font-size: 11px; margin-left: 3px; }
+.plug-legend { margin: 6px 0 0; font-size: 13px; }
