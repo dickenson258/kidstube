@@ -1,0 +1,5 @@
+{
+  "name": { "message": "DomiBuddy Helper · 朵米助手" },
+  "shortName": { "message": "DomiBuddy Helper" },
+  "description": { "message": "Lets DomiBuddy Lists read video titles, thumbnails and collections from Bilibili, YouTube and more, using your own browser sign-ins. Works only on DomiBuddy sites." }
+}

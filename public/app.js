@@ -3,6 +3,7 @@ import { DICT } from './i18n.js';
 import * as R from './resolver.js';
 import { detectHelper, onHelper, helperRequest, helperVersion, pingHelper } from './bridge.js';
 import { wrapSourceBuffer } from './h264fix.js';
+import * as S from './sync.js';
 
 // 检测到朵米助手后，跨域请求改由助手发出
 onHelper(() => R.setTransport(helperRequest));
@@ -33,6 +34,7 @@ function load() {
 const db = load();
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { toast(t('storageFail')); }
+  S.onSaved();
 }
 function usage() {
   if (db.usage.date !== today()) db.usage = { date: today(), sec: 0, bonus: 0 };
@@ -246,6 +248,7 @@ function route() {
   if (page === 'watch') return renderWatch(arg);
   if (page === 'series') return renderSeries(decodeURIComponent(arg || ''));
   if (page === 'import') return renderImport(arg);
+  if (page === 'pair') return renderPair(arg);
   if (page === 'parent') {
     if (!parentUnlocked) {
       location.hash = '#/';
@@ -1644,9 +1647,102 @@ async function runSelfTest() {
   $('#copytest').hidden = false;
 }
 
+// ------------------------------------------------------------ 多设备同步
+let syncState = { state: S.syncOn() ? 'idle' : 'off' };
+const fmtSyncTime = (ms) => (ms ? new Date(ms).toLocaleString(db.settings.lang === 'zh' ? 'zh-CN' : 'en', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
+function syncStatusText() {
+  const st = syncState;
+  if (st.state === 'syncing') return t('syncBusy');
+  if (st.state === 'error') return t('syncErr', st.error || '');
+  if (st.state === 'gone') return t('syncGone');
+  return t('syncLast', fmtSyncTime(S.syncInfo()?.at));
+}
+function syncPanel() {
+  if (!S.syncSupported()) return `<div class="panel"><h2>${t('syncTitle')}</h2><p class="hint">${t('syncNeedHttps')}</p></div>`;
+  if (!S.syncOn()) return `<div class="panel"><h2>${t('syncTitle')} <span class="badge">${t('syncBeta')}</span></h2>
+    <p class="hint">${t('syncIntro')}</p><button class="btn primary" id="sync-on">${t('syncEnable')}</button></div>`;
+  return `<div class="panel"><h2>${t('syncTitle')} <span class="badge ok">${t('syncIsOn')}</span></h2>
+    <p class="hint" id="sync-status">${esc(syncStatusText())}</p>
+    <div class="row"><button class="btn primary" id="sync-add">${t('syncAddDevice')}</button><button class="btn" id="sync-now">${t('syncNow')}</button>
+      <div class="spacer"></div><button class="btn small" id="sync-leave">${t('syncLeave')}</button><button class="btn danger small" id="sync-del">${t('syncDelete')}</button></div></div>`;
+}
+function bindSyncPanel(el) {
+  const on = (id, fn) => { const b = $('#' + id, el); if (b) b.onclick = fn; };
+  on('sync-on', async (e) => {
+    e.currentTarget.disabled = true;
+    await S.enableSync();
+    renderParent('settings');
+    if (syncState.state !== 'error') showPairDialog();
+  });
+  on('sync-add', showPairDialog);
+  on('sync-now', async () => { await S.syncNow(); toast(syncState.state === 'error' ? syncStatusText() : t('syncDone')); });
+  on('sync-leave', async () => {
+    if (!(await confirmBox({ title: t('syncLeave'), body: t('syncLeaveBody'), ok: t('syncLeave') }))) return;
+    S.leaveSync(); syncState = { state: 'off' }; renderParent('settings');
+  });
+  on('sync-del', async () => {
+    if (!(await confirmBox({ title: t('syncDelete'), body: t('syncDeleteBody'), ok: t('syncDelete') }))) return;
+    toast((await S.deleteCloud()) ? t('syncDeleted') : t('syncErr', ''));
+    syncState = { state: 'off' }; renderParent('settings');
+  });
+}
+function showPairDialog() {
+  const link = S.pairLink(location.origin + location.pathname);
+  modal(`<h2>${t('syncAddDevice')}</h2><p class="hint">${t('syncPairHint')}</p>
+    <div class="share-qr" id="pair-qr"></div>
+    <p class="warn" style="margin:12px 0">${t('syncPairWarn')}</p>
+    <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button><button class="btn primary" id="pair-copy">${t('copyLink')}</button></div>`, (dlg, close) => {
+    qrSvg(link).then((svg) => ($('#pair-qr', dlg).innerHTML = svg)).catch(() => {});
+    $('[data-a="close"]', dlg).onclick = close;
+    $('#pair-copy', dlg).onclick = async () => { try { await navigator.clipboard.writeText(link); toast(t('linkCopied')); } catch { toast(link); } };
+  });
+}
+// 打开配对链接：本设备加入家长的同步片单
+async function renderPair(key) {
+  history.replaceState(null, '', location.pathname + location.search + '#/pair'); // 密钥不留在地址栏和历史记录里
+  const already = S.syncOn();
+  app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${domi('wave', 100, t('domiName'))}</div>
+    <h1>${t('pairTitle')}</h1><p class="hint">${already ? t('pairAlready') : t('pairBody', db.videos.length)}</p>
+    <div class="row" style="justify-content:center"><a class="btn" href="#/">${t('cancel')}</a>${!key || !S.syncSupported() ? '' : `<button class="btn primary" id="pair-go">${t('pairJoin')}</button>`}</div>
+    ${S.syncSupported() ? '' : `<p class="warn">${t('syncNeedHttps')}</p>`}</main>`;
+  bindTopbar();
+  if (!$('#pair-go')) return;
+  $('#pair-go').onclick = async (e) => {
+    if (db.settings.pinHash && !(await unlockParent())) return;
+    e.currentTarget.disabled = true;
+    try {
+      S.leaveSync();
+      await S.joinSync(key);
+      toast(t('pairDone'));
+      location.hash = '#/';
+    } catch (err) {
+      e.currentTarget.disabled = false;
+      toast(err.message === 'not_found' ? t('pairNotFound') : t('syncErr', err.message));
+    }
+  };
+}
+S.initSync({
+  getDb: () => db,
+  applyRemote(snap) {
+    if (Array.isArray(snap.groups)) db.groups = snap.groups;
+    if (Array.isArray(snap.videos)) db.videos = snap.videos;
+    Object.assign(db.settings, snap.settings || {});
+    save();
+    // 孩子正在看视频时不打断；其他页面刷新一下显示新片单
+    const page = location.hash.split('/')[1] || '';
+    if (!['watch', 'parent', 'import', 'pair'].includes(page)) route();
+  },
+  onStatus(st) {
+    syncState = st;
+    const el = $('#sync-status');
+    if (el) el.textContent = syncStatusText();
+  },
+});
+
 function paneSettings(el) {
+  setTimeout(() => bindSyncPanel(el));
   const s = db.settings, u = usage();
-  el.innerHTML = `
+  el.innerHTML = `${syncPanel()}
     <div class="panel"><h2>${t('langTitle')}</h2>
       <div class="row">${Object.entries(DICT).map(([k, d]) => `<button class="chip ${k === s.lang ? 'on' : ''}" data-lang="${k}">${d.langName}</button>`).join('')}</div></div>
     <div class="panel"><h2>${t('setTitle')}</h2>

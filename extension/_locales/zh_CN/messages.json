@@ -1,0 +1,5 @@
+{
+  "name": { "message": "朵米助手 · DomiBuddy Helper" },
+  "shortName": { "message": "朵米助手" },
+  "description": { "message": "让朵米片单读取 B 站、YouTube 等网站的视频标题、封面和合集，使用你自己浏览器的登录状态。只在朵米片单网站上工作。" }
+}
