@@ -23,7 +23,7 @@
   <p class="muted">朵米片单（DomiBuddy Lists）网站与朵米助手（DomiBuddy Helper）浏览器扩展 · 更新于 2026-11-12 · <a href="#en">English</a></p>
 
   <h2>一句话</h2>
-  <p>我们不收集、不上传、不出售任何个人信息。孩子的片单和观看记录只保存在你自己的浏览器里。</p>
+  <p>我们不收集、不出售任何个人信息。孩子的片单和观看记录默认只保存在你自己的浏览器里；只有你主动开启"多设备同步"时，片单才会<b>加密后</b>上传，我们无法读取内容。</p>
 
   <h2>朵米片单网站</h2>
   <ul>
@@ -31,6 +31,15 @@
     <li>不使用任何统计、广告或第三方追踪代码。</li>
     <li>播放视频时，视频由 YouTube、哔哩哔哩等网站的官方播放器加载，这些网站按照它们自己的隐私政策处理播放数据。</li>
     <li>"分享片单"生成的链接里只有视频编号、标题、封面和合集信息，不包含孩子的观看记录或任何家庭信息。链接内容由你自己决定发给谁。</li>
+  </ul>
+
+  <h2>多设备同步（可选）</h2>
+  <ul>
+    <li>默认关闭，由家长在设置里主动开启。不需要注册账号，不收集邮箱、姓名或其他身份信息。</li>
+    <li>片单、分组、家长密码（哈希）和家长设置在你的设备上用 AES-GCM 加密后才上传到 api.domibuddy.com。加密密钥只保存在你的设备里，我们无法解密。</li>
+    <li>为了让家长查看和移除设备，服务器会以明文保存：每台设备的名称（例如"iPad · Safari"，可以改名）、设备类型（家长 / 孩子）、加入时间和最近同步时间。</li>
+    <li>观看进度、每日已看时长和界面语言不会同步，只保存在各自设备上。</li>
+    <li>家长可以随时移除设备（可选同时清空那台设备上的片单），或删除云端数据；删除后服务器上的密文和设备记录会一并删除。</li>
   </ul>
 
   <h2>朵米助手浏览器扩展</h2>
@@ -50,13 +59,21 @@
 
   <h2 id="en">Privacy Policy (English)</h2>
   <p class="muted">DomiBuddy Lists (朵米片单) website and DomiBuddy Helper (朵米助手) browser extension · Updated 2026-11-12</p>
-  <p><b>In short:</b> we don't collect, upload or sell any personal information. Your child's lists and watch history stay in your own browser.</p>
+  <p><b>In short:</b> we don't collect or sell any personal information. Your child's lists and watch history stay in your own browser by default; only if you turn on multi-device sync is the list uploaded, <b>encrypted</b>, and we can't read it.</p>
   <h3>The website</h3>
   <ul>
     <li>Video lists, groups, the parent PIN (stored only as a hash), daily watch time and progress are kept in this browser's local storage and are never sent to our servers.</li>
     <li>No analytics, advertising or third-party tracking code.</li>
     <li>Videos play in the official players of YouTube, Bilibili and other sites, which handle playback data under their own privacy policies.</li>
     <li>A shared list link holds only video IDs, titles, thumbnails and series info, never watch history or family information. You decide who receives it.</li>
+  </ul>
+  <h3>Multi-device sync (optional)</h3>
+  <ul>
+    <li>Off by default; a parent turns it on in Settings. No account, and no email, name or other identity information is collected.</li>
+    <li>The list, groups, parent PIN hash and parent settings are encrypted with AES-GCM on your device before upload to api.domibuddy.com. The key stays on your devices; we can't decrypt it.</li>
+    <li>So parents can see and remove devices, the server stores in plain text each device's name (such as “iPad · Safari”, which you can rename), its type (parent / child), when it joined, and when it last synced.</li>
+    <li>Watch progress, today's watch time and interface language are not synced; they stay on each device.</li>
+    <li>Parents can remove a device at any time (optionally clearing its list) or delete the cloud copy, which deletes the ciphertext and all device records.</li>
   </ul>
   <h3>The browser extension</h3>
   <ul>

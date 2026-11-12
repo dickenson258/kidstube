@@ -377,3 +377,9 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .import-group { display: flex; align-items: center; gap: 8px; font-weight: 700; flex-wrap: wrap; }
 .import-group select { width: auto; flex: 1; min-width: 160px; }
 .card.static { cursor: default; }
+
+/* 同步设备列表 */
+.device-list { display: grid; gap: 8px; margin: 6px 0 14px; }
+.device-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.device-name { font-weight: 700; }
+.pair-roles { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 6px 0 12px; }

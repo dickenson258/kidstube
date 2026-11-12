@@ -1661,24 +1661,61 @@ function syncPanel() {
   if (!S.syncSupported()) return `<div class="panel"><h2>${t('syncTitle')}</h2><p class="hint">${t('syncNeedHttps')}</p></div>`;
   if (!S.syncOn()) return `<div class="panel"><h2>${t('syncTitle')} <span class="badge">${t('syncBeta')}</span></h2>
     <p class="hint">${t('syncIntro')}</p><button class="btn primary" id="sync-on">${t('syncEnable')}</button></div>`;
-  return `<div class="panel"><h2>${t('syncTitle')} <span class="badge ok">${t('syncIsOn')}</span></h2>
+  const parent = S.isParentDevice();
+  return `<div class="panel"><h2>${t('syncTitle')} <span class="badge ok">${t('syncIsOn')}</span> <span class="badge">${parent ? t('roleParent') : t('roleChild')}</span></h2>
     <p class="hint" id="sync-status">${esc(syncStatusText())}</p>
-    <div class="row"><button class="btn primary" id="sync-add">${t('syncAddDevice')}</button><button class="btn" id="sync-now">${t('syncNow')}</button>
-      <div class="spacer"></div><button class="btn small" id="sync-leave">${t('syncLeave')}</button><button class="btn danger small" id="sync-del">${t('syncDelete')}</button></div></div>`;
+    ${parent ? `<h3>${t('devTitle')}</h3><div id="sync-devices" class="device-list"><p class="hint">${t('devLoading')}</p></div>` : `<p class="hint">${t('devChildNote')}</p>`}
+    <div class="row">${parent ? `<button class="btn primary" id="sync-add">${t('syncAddDevice')}</button>` : ''}<button class="btn" id="sync-now">${t('syncNow')}</button>
+      <div class="spacer"></div><button class="btn small" id="sync-leave">${t('syncLeave')}</button>${parent ? `<button class="btn danger small" id="sync-del">${t('syncDelete')}</button>` : ''}</div></div>`;
+}
+async function drawDevices(el) {
+  const box = $('#sync-devices', el);
+  if (!box) return;
+  let d;
+  try { d = await S.listDevices(); } catch (e) { box.innerHTML = `<p class="warn">${esc(t('syncErr', e.message))}</p>`; return; }
+  if (!box.isConnected) return;
+  box.innerHTML = d.devices.map((v) => `<div class="device-row" data-id="${esc(v.id)}">
+      <div class="grow"><div class="device-name">${esc(v.name)}${v.id === d.self ? ` <span class="badge ok">${t('devThis')}</span>` : ''}</div>
+        <div class="hint" style="margin:0">${v.role === 'parent' ? t('roleParent') : t('roleChild')} · ${t('devLastSeen', fmtSyncTime(v.lastSeen))}</div></div>
+      <button class="btn small" data-rename>${t('devRename')}</button>${v.id === d.self ? '' : `<button class="btn danger small" data-remove>${t('devRemove')}</button>`}</div>`).join('');
+  box.querySelectorAll('[data-rename]').forEach((b) => (b.onclick = () => {
+    const row = b.closest('.device-row'), cur = d.devices.find((x) => x.id === row.dataset.id);
+    modal(`<h2>${t('devRename')}</h2><input class="field" id="dev-name" maxlength="40" value="${esc(cur.name)}">
+      <div class="row confirm-acts"><button class="btn" data-a="close">${t('cancel')}</button><button class="btn primary" id="dev-save">${t('save')}</button></div>`, (dlg, close) => {
+      $('#dev-name', dlg).focus();
+      $('[data-a="close"]', dlg).onclick = close;
+      $('#dev-save', dlg).onclick = async () => {
+        try { await S.renameDevice(cur.id, $('#dev-name', dlg).value.trim()); close(); drawDevices(el); } catch (e) { toast(t('syncErr', e.message)); }
+      };
+    });
+  }));
+  box.querySelectorAll('[data-remove]').forEach((b) => (b.onclick = () => {
+    const cur = d.devices.find((x) => x.id === b.closest('.device-row').dataset.id);
+    modal(`<h2>${t('devRemoveTitle', cur.name)}</h2><p class="confirm-body">${t('devRemoveBody')}</p>
+      <label class="inline" style="margin:4px 0 8px"><input type="checkbox" id="dev-wipe" checked> ${t('devWipe')}</label>
+      <p class="hint">${t('devWipeHint')}</p>
+      <div class="row confirm-acts"><button class="btn" data-a="close">${t('cancel')}</button><button class="btn danger-solid" id="dev-rm">${t('devRemove')}</button></div>`, (dlg, close) => {
+      $('[data-a="close"]', dlg).onclick = close;
+      $('#dev-rm', dlg).onclick = async () => {
+        try { await S.removeDevice(cur.id, $('#dev-wipe', dlg).checked); close(); toast(t('devRemoved', cur.name)); drawDevices(el); } catch (e) { toast(t('syncErr', e.message)); }
+      };
+    });
+  }));
 }
 function bindSyncPanel(el) {
   const on = (id, fn) => { const b = $('#' + id, el); if (b) b.onclick = fn; };
+  drawDevices(el);
   on('sync-on', async (e) => {
     e.currentTarget.disabled = true;
-    await S.enableSync();
+    try { await S.enableSync(); } catch (err) { toast(t('syncErr', err.message)); e.currentTarget.disabled = false; return; }
     renderParent('settings');
-    if (syncState.state !== 'error') showPairDialog();
+    showPairDialog();
   });
   on('sync-add', showPairDialog);
   on('sync-now', async () => { await S.syncNow(); toast(syncState.state === 'error' ? syncStatusText() : t('syncDone')); });
   on('sync-leave', async () => {
     if (!(await confirmBox({ title: t('syncLeave'), body: t('syncLeaveBody'), ok: t('syncLeave') }))) return;
-    S.leaveSync(); syncState = { state: 'off' }; renderParent('settings');
+    await S.leaveSync(); syncState = { state: 'off' }; renderParent('settings');
   });
   on('sync-del', async () => {
     if (!(await confirmBox({ title: t('syncDelete'), body: t('syncDeleteBody'), ok: t('syncDelete') }))) return;
@@ -1686,24 +1723,35 @@ function bindSyncPanel(el) {
     syncState = { state: 'off' }; renderParent('settings');
   });
 }
+// 添加设备：先选是孩子的设备还是家长的另一台设备，再生成一次性邀请二维码
 function showPairDialog() {
-  const link = S.pairLink(location.origin + location.pathname);
-  modal(`<h2>${t('syncAddDevice')}</h2><p class="hint">${t('syncPairHint')}</p>
-    <div class="share-qr" id="pair-qr"></div>
-    <p class="warn" style="margin:12px 0">${t('syncPairWarn')}</p>
-    <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button><button class="btn primary" id="pair-copy">${t('copyLink')}</button></div>`, (dlg, close) => {
-    qrSvg(link).then((svg) => ($('#pair-qr', dlg).innerHTML = svg)).catch(() => {});
+  modal(`<h2>${t('syncAddDevice')}</h2><p class="hint">${t('pairWhich')}</p>
+    <div class="pair-roles"><button class="btn primary" data-role="child">${t('pairChild')}</button><button class="btn" data-role="parent">${t('pairParent')}</button></div>
+    <div id="pair-out"></div>
+    <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button></div>`, (dlg, close) => {
     $('[data-a="close"]', dlg).onclick = close;
-    $('#pair-copy', dlg).onclick = async () => { try { await navigator.clipboard.writeText(link); toast(t('linkCopied')); } catch { toast(link); } };
+    dlg.querySelectorAll('[data-role]').forEach((b) => (b.onclick = async () => {
+      dlg.querySelectorAll('[data-role]').forEach((x) => x.classList.toggle('primary', x === b));
+      const out = $('#pair-out', dlg);
+      out.innerHTML = `<p class="hint">${t('devLoading')}</p>`;
+      let inv;
+      try { inv = await S.createInvite(location.origin + location.pathname, b.dataset.role); } catch (e) { out.innerHTML = `<p class="warn">${esc(t('syncErr', e.message))}</p>`; return; }
+      out.innerHTML = `<p class="hint">${t(inv.role === 'parent' ? 'pairHintParent' : 'pairHintChild')}</p><div class="share-qr" id="pair-qr"></div>
+        <p class="hint share-qr-note">${t('pairOnce', fmtSyncTime(inv.expiresAt))}</p>
+        <p class="warn" style="margin:8px 0">${t('syncPairWarn')}</p>
+        <div class="row" style="justify-content:center"><button class="btn" id="pair-copy">${t('copyLink')}</button></div>`;
+      qrSvg(inv.link).then((svg) => ($('#pair-qr', dlg).innerHTML = svg)).catch(() => {});
+      $('#pair-copy', dlg).onclick = async () => { try { await navigator.clipboard.writeText(inv.link); toast(t('linkCopied')); } catch { toast(inv.link); } };
+    }));
   });
 }
-// 打开配对链接：本设备加入家长的同步片单
-async function renderPair(key) {
-  history.replaceState(null, '', location.pathname + location.search + '#/pair'); // 密钥不留在地址栏和历史记录里
+// 打开配对链接：本设备用邀请加入家长的同步片单
+async function renderPair(code) {
+  history.replaceState(null, '', location.pathname + location.search + '#/pair'); // 密钥和邀请不留在地址栏和历史记录里
   const already = S.syncOn();
   app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${domi('wave', 100, t('domiName'))}</div>
     <h1>${t('pairTitle')}</h1><p class="hint">${already ? t('pairAlready') : t('pairBody', db.videos.length)}</p>
-    <div class="row" style="justify-content:center"><a class="btn" href="#/">${t('cancel')}</a>${!key || !S.syncSupported() ? '' : `<button class="btn primary" id="pair-go">${t('pairJoin')}</button>`}</div>
+    <div class="row" style="justify-content:center"><a class="btn" href="#/">${t('cancel')}</a>${!code || !S.syncSupported() ? '' : `<button class="btn primary" id="pair-go">${t('pairJoin')}</button>`}</div>
     ${S.syncSupported() ? '' : `<p class="warn">${t('syncNeedHttps')}</p>`}</main>`;
   bindTopbar();
   if (!$('#pair-go')) return;
@@ -1711,13 +1759,13 @@ async function renderPair(key) {
     if (db.settings.pinHash && !(await unlockParent())) return;
     e.currentTarget.disabled = true;
     try {
-      S.leaveSync();
-      await S.joinSync(key);
+      if (S.syncOn()) await S.leaveSync();
+      await S.joinSync(code);
       toast(t('pairDone'));
       location.hash = '#/';
     } catch (err) {
       e.currentTarget.disabled = false;
-      toast(err.message === 'not_found' ? t('pairNotFound') : t('syncErr', err.message));
+      toast(err.message === 'invite_invalid' ? t('pairUsed') : err.message === 'bad_link' ? t('pairBadLink') : t('syncErr', err.message));
     }
   };
 }
@@ -1736,6 +1784,21 @@ S.initSync({
     syncState = st;
     const el = $('#sync-status');
     if (el) el.textContent = syncStatusText();
+  },
+  // 家长把这台设备移除了：按家长的选择清空同步来的片单
+  onRevoked(wipe) {
+    syncState = { state: 'off' };
+    if (wipe) {
+      db.videos = [];
+      db.progress = {};
+      save();
+      toast(t('devRevokedWiped'));
+      location.hash = '#/';
+      route();
+    } else {
+      toast(t('devRevoked'));
+      if (location.hash.startsWith('#/parent/settings')) renderParent('settings');
+    }
   },
 });
 
