@@ -1848,6 +1848,31 @@ async function drawDevices(el) {
   }));
 }
 const syncErrText = (m) => ({ beta_full: t('betaFull'), closed: t('betaClosed'), too_many_requests: t('tooMany') })[m] || t('syncErr', m);
+// 开启同步前先问：这个家庭是不是已经在别的设备 / 别的浏览器开过了？开过就加入那个同步（配对链接或恢复码），
+// 不再新开一个——同一部手机的不同浏览器数据是分开的，网页无法知道它们是同一台设备
+function askFirstSync(btn, start) {
+  modal(`<h2>${t('firstSyncTitle')}</h2><p class="confirm-body">${t('firstSyncBody')}</p>
+    <div class="first-sync">
+      <button class="btn primary" id="fs-new">${t('firstSyncNew')}</button>
+      <div class="fs-or">${t('firstSyncHave')}</div>
+      <div class="row"><input class="field grow" id="fs-link" placeholder="${t('firstSyncLinkPh')}" style="padding:9px 12px"><button class="btn" id="fs-join">${t('pairJoin')}</button></div>
+      <p class="hint" style="margin:6px 0 10px">${t('firstSyncLinkHint')}</p>
+      <a class="btn" href="#/recover" id="fs-rc">${t('recoverLink')}</a>
+    </div>
+    <div class="row confirm-acts"><button class="btn" data-a="close">${t('cancel')}</button></div>`, (dlg, close) => {
+    $('[data-a="close"]', dlg).onclick = close;
+    $('#fs-rc', dlg).onclick = close;
+    $('#fs-new', dlg).onclick = () => { close(); start(btn); };
+    const join = () => {
+      const m = $('#fs-link', dlg).value.trim().match(/#\/pair\/([^\s#]+)/);
+      if (!m) { toast(t('pairBadLink')); return $('#fs-link', dlg).focus(); }
+      close();
+      location.hash = '#/pair/' + m[1];
+    };
+    $('#fs-join', dlg).onclick = join;
+    $('#fs-link', dlg).onkeydown = (e) => { if (e.key === 'Enter') join(); };
+  });
+}
 function bindSyncPanel(el) {
   const on = (id, fn) => { const b = $('#' + id, el); if (b) b.onclick = fn; };
   drawDevices(el);
@@ -1860,15 +1885,14 @@ function bindSyncPanel(el) {
       seats.innerHTML = `${st.reason === 'beta_full' ? t('betaFull') : t('betaClosed')} ${t('betaMeanwhile')}`;
     } else if (st.remaining != null) seats.textContent = t('betaSeats', st.remaining);
   });
-  on('sync-on', async (e) => {
-    e.currentTarget.disabled = true;
+  on('sync-on', (e) => askFirstSync(e.currentTarget, async (btn) => {
+    btn.disabled = true;
     let code;
-    const btn = e.currentTarget;
     try { code = await S.enableSync(); } catch (err) { toast(syncErrText(err.message)); btn.disabled = false; return; }
     renderParent('settings');
     if (code) showRecoveryDialog(code, () => showPairDialog());
     else showPairDialog();
-  });
+  }));
   on('sync-add', () => showPairDialog());
   on('sync-rc', async () => {
     const code = S.recoveryCode();

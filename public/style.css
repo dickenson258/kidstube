@@ -406,3 +406,8 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
   .lib-filters .lib-q { flex-basis: 100%; }
   .lib-actions .spacer { flex-basis: 100%; height: 0; }
 }
+
+/* 开启同步前的"已经开过了吗"对话框 */
+.first-sync { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin: 6px 0 4px; }
+.first-sync .fs-or { margin-top: 10px; font-weight: 700; }
+.first-sync > .btn { justify-content: center; }
