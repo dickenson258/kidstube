@@ -57,7 +57,7 @@ Privacy:
 
 ## 隐私政策网址
 
-https://lists.domibuddy.com/privacy.html
+https://lists.domibuddy.com/privacy
 
 ## 权限说明（Chrome 审核表单里逐项填写）
 
