@@ -1295,7 +1295,7 @@ function shareDialog(videos, defaultTitle) {
     <p class="hint share-qr-note" id="sh-qrnote"></p>
     <textarea class="field share-link" id="sh-link" readonly rows="2"></textarea>
     <p class="hint" id="sh-shortnote" style="margin:6px 0 0"></p>
-    <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button>${navigator.share ? `<button class="btn" id="sh-native">${t('shareSystem')}</button>` : ''}<button class="btn primary" id="sh-copy">${t('copyLink')}</button></div>`, (dlg, close) => {
+    <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button><button class="btn" id="sh-poster">${t('posterBtn')}</button>${navigator.share ? `<button class="btn" id="sh-native">${t('shareSystem')}</button>` : ''}<button class="btn primary" id="sh-copy">${t('copyLink')}</button></div>`, (dlg, close) => {
     let link = '', seq = 0;
     const build = async () => {
       const my = ++seq;
@@ -1326,8 +1326,62 @@ function shareDialog(videos, defaultTitle) {
       toast(t('linkCopied'));
     };
     if ($('#sh-native', dlg)) $('#sh-native', dlg).onclick = () => navigator.share({ title: $('#sh-name', dlg).value, url: link }).catch(() => {});
+    $('#sh-poster', dlg).onclick = () => link && showPoster(link, $('#sh-name', dlg).value.trim() || defaultTitle, ok.length);
     build();
   });
+}
+
+// 微信分享图：微信聊天里普通链接不会显示成卡片，所以生成一张带二维码的图片，长按保存后发到微信，对方长按识别即可打开
+const svgImage = (svg) => new Promise((ok, fail) => {
+  const img = new Image();
+  img.onload = () => ok(img);
+  img.onerror = fail;
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+});
+async function makePoster(link, title, count) {
+  const W = 750, H = 1100, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const font = (w, px) => `${w} ${px}px "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", system-ui, sans-serif`;
+  g.fillStyle = '#fff8ef'; g.fillRect(0, 0, W, H);
+  // 朵米（脱离网页后 CSS 变量无效，换成固定颜色）
+  const domiSvg = domi('wave', 180).replace(/var\(--domi-ink\)/g, '#1c1b20').replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+  g.drawImage(await svgImage(domiSvg), (W - 180) / 2, 50, 180, 210);
+  // 标题（最多两行）
+  g.fillStyle = '#2d2a32'; g.textAlign = 'center'; g.font = font(800, 46);
+  const lines = [];
+  let cur = '', cut = false;
+  for (const ch of title) {
+    if (g.measureText(cur + ch).width > W - 120) {
+      lines.push(cur); cur = '';
+      if (lines.length === 2) { cut = true; break; }
+    }
+    cur += ch;
+  }
+  if (!cut && cur) lines.push(cur);
+  if (cut) lines[1] = lines[1].slice(0, -1) + '…';
+  lines.forEach((l, i) => g.fillText(l, W / 2, 330 + i * 60));
+  const y0 = 330 + lines.length * 60;
+  g.fillStyle = '#7a7383'; g.font = font(500, 28);
+  g.fillText(t('posterSub', count), W / 2, y0 + 10);
+  // 二维码
+  const qrSize = 380, qx = (W - qrSize) / 2, qy = y0 + 60;
+  g.fillStyle = '#ffffff';
+  g.beginPath(); g.roundRect ? g.roundRect(qx - 24, qy - 24, qrSize + 48, qrSize + 48, 28) : g.rect(qx - 24, qy - 24, qrSize + 48, qrSize + 48); g.fill();
+  const qr = (await qrSvg(link)).replace('<svg ', `<svg width="${qrSize}" height="${qrSize}" `);
+  g.drawImage(await svgImage(qr), qx, qy, qrSize, qrSize);
+  g.fillStyle = '#ff7a59'; g.font = font(700, 30);
+  g.fillText(t('posterScan'), W / 2, qy + qrSize + 80);
+  g.fillStyle = '#7a7383'; g.font = font(500, 24);
+  g.fillText('朵米片单 DomiBuddy Lists · lists.domibuddy.com', W / 2, H - 50);
+  return c.toDataURL('image/png');
+}
+async function showPoster(link, title, count) {
+  let url;
+  try { url = await makePoster(link, title, count); } catch { return toast(t('posterFail')); }
+  modal(`<h2>${t('posterTitle')}</h2><p class="hint">${t('posterHint')}</p>
+    <img class="poster-img" src="${url}" alt="${esc(title)}">
+    <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button><a class="btn primary" href="${url}" download="domibuddy-list.png">${t('posterSave')}</a></div>`, (dlg, close) => ($('[data-a="close"]', dlg).onclick = close));
 }
 
 // 打开分享链接：预览片单，家长输入密码后导入
