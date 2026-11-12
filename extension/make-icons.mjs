@@ -1,4 +1,4 @@
-// 生成扩展图标（PNG）：与网站图标 public/icon.svg 同一造型——浅橙圆角底 + 蓝色圆角等边三角朵米 + 两只小眼睛。
+// 生成扩展图标（PNG）：与网站图标 public/icon.svg 同一造型——浅橙圆角底 + 蓝色圆角等边三角朵米、两只小眼睛、细线手脚。
 // 纯 Node，无依赖：逐像素 4×4 超采样后写 PNG。用法：node extension/make-icons.mjs
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
@@ -9,8 +9,8 @@ const OUT = join(dirname(fileURLToPath(import.meta.url)), 'icons');
 mkdirSync(OUT, { recursive: true });
 
 // 64×64 设计坐标（与 icon.svg 一致）
-const BG = [0xff, 0xe4, 0xd9], BLUE = [0x0a, 0x5c, 0xff], INK = [0x11, 0x11, 0x11];
-const A = [32, 12.3], B = [57, 55.7], C = [7, 55.7], R = 7; // 三角形顶点与圆角半径
+const BG = [0xff, 0xe4, 0xd9], BLUE = [0x0a, 0x5c, 0xff], INK = [0x11, 0x11, 0x11], LIMB = [0x1c, 0x1b, 0x20];
+const A = [32, 11.1], B = [51, 44], C = [13, 44], R = 3.2; // 三角形顶点与圆角半径（与 icon.svg 一致）
 const insideRoundRect = (x, y) => {
   const r = 16, cx = Math.min(Math.max(x, r), 64 - r), cy = Math.min(Math.max(y, r), 64 - r);
   return x >= 0 && y >= 0 && x <= 64 && y <= 64 && (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
@@ -39,7 +39,13 @@ const inTri = (p, [a, b, c]) => {
   return (d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0);
 };
 const inBody = (x, y) => inTri([x, y], T) || Math.min(segDist([x, y], T[0], T[1]), segDist([x, y], T[1], T[2]), segDist([x, y], T[2], T[0])) <= R;
-const inEye = (x, y) => [28.7, 35.3].some((cx) => ((x - cx) / 1.5) ** 2 + ((y - 32.5) / 2.5) ** 2 <= 1);
+const inEye = (x, y) => [28.9, 35.1].some((cx) => ((x - cx) / 1.4) ** 2 + ((y - 26) / 2.3) ** 2 <= 1);
+// 手脚：线宽 2.4 的折线 / 二次曲线（采样成折线），手是小圆点
+const quad = (p0, c, p1, n = 12) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n, u = 1 - t; return [u * u * p0[0] + 2 * u * t * c[0] + t * t * p1[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1]]; });
+const LIMBS = [quad([21, 32], [16, 33.5], [11.5, 36]), quad([43, 32], [48, 33.5], [52.5, 36]), [[27.5, 43], [27.5, 51], [24, 51]], [[36.5, 43], [36.5, 51], [40, 51]]];
+const HANDS = [[11.5, 36], [52.5, 36]];
+const inLimb = (x, y) => HANDS.some(([hx, hy]) => (x - hx) ** 2 + (y - hy) ** 2 <= 1.8 ** 2)
+  || LIMBS.some((pl) => pl.slice(1).some((q, i) => segDist([x, y], pl[i], q) <= 1.2));
 
 function render(size) {
   const ss = 4, px = Buffer.alloc(size * (size * 4 + 1));
@@ -50,7 +56,7 @@ function render(size) {
       for (let sj = 0; sj < ss; sj++) for (let si = 0; si < ss; si++) {
         const x = ((i + (si + 0.5) / ss) / size) * 64, y = ((j + (sj + 0.5) / ss) / size) * 64;
         if (!insideRoundRect(x, y)) continue;
-        const c = inEye(x, y) ? INK : inBody(x, y) ? BLUE : BG;
+        const c = inEye(x, y) ? INK : inBody(x, y) ? BLUE : inLimb(x, y) ? LIMB : BG;
         r += c[0]; g += c[1]; b += c[2]; a += 255;
       }
       const n = ss * ss, o = j * (size * 4 + 1) + 1 + i * 4, cov = a / 255 || 1;
