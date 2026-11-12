@@ -142,6 +142,30 @@ const ICON = {
   play: (n) => svg('<path d="M8 5.5v13l10-6.5z"/>', n),
   window: (n) => svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M14 13h4v4"/><path d="m18 13-5 5"/>', n),
 };
+// 朵米（朵米伙伴的品牌角色）：蓝色圆角等边三角、两个小竖椭圆眼睛、细线手脚、不画嘴。
+// pose：idle 待机漂浮 / wave 挥手 / hop 轻跳 / jump 开心跃起。手脚颜色跟随 --domi-ink（深色模式、视频遮罩上自动变浅）
+const DOMI_ARMS = {
+  idle: ['M28 88 Q16 92 7 100', 'M92 88 Q104 92 113 100', [7, 100], [113, 100]],
+  wave: ['M28 88 Q16 92 7 100', 'M91 84 Q107 76 109 54', [7, 100], [109, 54]],
+  hop: ['M29 82 Q13 74 9 58', 'M91 82 Q107 74 111 58', [9, 58], [111, 58]],
+};
+DOMI_ARMS.jump = DOMI_ARMS.hop;
+function domi(pose = 'idle', size = 120, label = '') {
+  const [l, r, lh, rh] = DOMI_ARMS[pose] || DOMI_ARMS.idle;
+  const legs = pose === 'jump'
+    ? '<path d="M50 112 Q46 120 40 122"/><path d="M70 112 Q74 120 80 122"/>'
+    : '<path d="M50 112 V128 H43"/><path d="M70 112 V128 H77"/>';
+  return `<svg class="domi domi-${pose}" width="${size}" height="${Math.round(size * 7 / 6)}" viewBox="0 0 120 140" ${label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"'}>
+    <g class="domi-body">
+      <g fill="none" stroke="var(--domi-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+        <path class="domi-arm-l" d="${l}"/><path class="domi-arm-r" d="${r}"/>${legs}
+      </g>
+      <circle cx="${lh[0]}" cy="${lh[1]}" r="3.6" fill="var(--domi-ink)"/><circle class="domi-hand-r" cx="${rh[0]}" cy="${rh[1]}" r="3.6" fill="var(--domi-ink)"/>
+      <path d="M66.5 40.1 L101.5 100.7 Q108 112 95 112 L25 112 Q12 112 18.5 100.7 L53.5 40.1 Q60 28.9 66.5 40.1 Z" fill="#0a5cff"/>
+      <g class="domi-eyes" fill="#111"><ellipse cx="53.5" cy="66" rx="2.5" ry="4.2"/><ellipse cx="66.5" cy="66" rx="2.5" ry="4.2"/></g>
+    </g>
+  </svg>`;
+}
 const thumbImg = (v) => (v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '');
 
 // PIN 输入框：mode = 'verify' | 'set'
@@ -427,7 +451,7 @@ function helperGuide() {
 function welcomeGuide() {
   const ver = helperVersion();
   return `<div class="welcome" data-helper="${ver ? 'on' : 'off'}">
-    <div class="big">${ICON.tv(64)}</div><h2>${t('g_title')}</h2><p class="hint">${t('g_intro')}</p>
+    <div class="big"><div class="domi-say">${t('domiHello')}</div>${domi('wave', 104, t('domiName'))}</div><h2>${t('g_title')}</h2><p class="hint">${t('g_intro')}</p>
     <div class="welcome-step"><div class="num">1</div><div class="body"><h3>${t('g_s1')} ${ver ? `<span class="badge ok">${t('helperOn', ver)}</span>` : ''}</h3>
       <p class="hint">${t('g_s1why')}</p>${ver ? '' : `${helperGuide()}
       <div class="row"><button class="btn" id="guide-recheck">${t('helperRecheck')}</button></div>
@@ -508,7 +532,7 @@ function watchYouTube(box, onEnded) {
     if (state === 0) {
       box.dispatchEvent(new CustomEvent('kt-time', { detail: { t: Infinity, d: 1 } }));
       if (onEnded?.()) { cover.hidden = true; return; } // 有下一集：交给倒计时
-      cover.innerHTML = `<div class="ended"><div class="big">${ICON.star(56)}</div><div>${t('ended')}</div><div class="row"><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div></div>`;
+      cover.innerHTML = `<div class="ended"><div class="big">${domi('hop', 64, t('domiName'))}</div><div>${t('ended')}</div><div class="row"><button class="btn primary" data-a="replay">${t('replay')}</button><a class="btn" href="#/">${t('back')}</a></div></div>`;
       cover.hidden = false;
     } else if (state === 2) {
       cover.innerHTML = `<button class="play-big" data-a="play" aria-label="play">▶</button>`;
@@ -689,7 +713,7 @@ function loadScript(src) {
 
 // ------------------------------------------------------------ 播放页
 function renderRest() {
-  app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${ICON.moon(88)}</div><h1>${t('restTitle')}</h1><p class="hint">${t('restBody')}</p>
+  app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${domi('wave', 120, t('domiName'))}</div><h1>${t('restTitle')}</h1><p class="hint">${t('restBody')}</p>
     <button class="btn" id="more">${t('restMore')}</button></main>`;
   bindTopbar();
   $('#more').onclick = async () => {
