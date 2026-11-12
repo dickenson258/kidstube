@@ -1451,7 +1451,7 @@ async function backfillThumbs(list) {
   if (!location.hash || location.hash === '#/') route();
 }
 
-let libGroup = ALL, libCreator = ALL;
+let libGroup = ALL, libCreator = ALL, libSeries = ALL;
 function paneLibrary(el) {
   let q = '';
   const sel = new Set(); // 勾选的视频 id
@@ -1461,6 +1461,20 @@ function paneLibrary(el) {
     if (libCreator !== ALL && !cs.some((c) => c.key === libCreator)) libCreator = ALL;
     $('#lc').innerHTML = `<option value="${ALL}">${t('allCreators')}</option>` + cs.map((c) => `<option value="${esc(c.key)}" ${c.key === libCreator ? 'selected' : ''}>${esc(c.name)} (${c.count})</option>`).join('');
   };
+  // 合集筛选：列出当前分组和频道下的合集（按名称），NONE 表示"不在合集里的视频"
+  const NONE = '__noseries__';
+  const drawSeries = () => {
+    const base = db.videos.filter((v) => (libGroup === ALL || v.group === libGroup) && (libCreator === ALL || creatorKey(v) === libCreator));
+    const m = new Map();
+    for (const v of base) if (v.series) { const x = m.get(v.series.id) || { title: v.series.title, n: 0 }; x.n++; m.set(v.series.id, x); }
+    const loose = base.filter((v) => !v.series).length;
+    if (libSeries !== ALL && libSeries !== NONE && !m.has(libSeries)) libSeries = ALL;
+    $('#ls').hidden = !m.size;
+    if (!m.size) libSeries = ALL;
+    $('#ls').innerHTML = `<option value="${ALL}">${t('allSeries')}</option>`
+      + [...m].sort((a, b) => a[1].title.localeCompare(b[1].title, 'zh')).map(([id, x]) => `<option value="${esc(id)}" ${id === libSeries ? 'selected' : ''}>${esc(x.title)} (${x.n})</option>`).join('')
+      + (loose ? `<option value="${NONE}" ${libSeries === NONE ? 'selected' : ''}>${t('noSeries')} (${loose})</option>` : '');
+  };
   const drawGroups = () => {
     // 分组保留（空分组显示 0），只更新数量
     const n = (g) => db.videos.filter((v) => v.group === g).length;
@@ -1469,7 +1483,8 @@ function paneLibrary(el) {
   const filtered = () => db.videos
     .filter((v) => libGroup === ALL || v.group === libGroup)
     .filter((v) => libCreator === ALL || creatorKey(v) === libCreator)
-    .filter((v) => !q || (v.title + v.author + v.group).toLowerCase().includes(q));
+    .filter((v) => libSeries === ALL || (libSeries === NONE ? !v.series : v.series?.id === libSeries))
+    .filter((v) => !q || (v.title + v.author + v.group + (v.series?.title || '')).toLowerCase().includes(q));
   const drawBulk = () => {
     const shown = filtered();
     $('#selall').textContent = t('selectShown', shown.length);
@@ -1495,6 +1510,7 @@ function paneLibrary(el) {
     $('#libcnt').textContent = t('libCount', db.videos.length);
     drawGroups();
     drawCreators();
+    drawSeries();
     draw();
   };
   const removeIds = (ids) => {
@@ -1513,6 +1529,7 @@ function paneLibrary(el) {
     <div class="row" style="margin-bottom:10px">
       <select class="field" id="lg" style="width:auto"></select>
       <select class="field" id="lc" style="width:auto"></select>
+      <select class="field" id="ls" style="width:auto" hidden></select>
       <input class="field grow" id="lq" placeholder="${t('libSearch')}">
       <button class="btn small" id="newg">${t('manageGroups')}</button><button class="btn danger small" id="delall">${t('clearAll')}</button>
       <button class="btn primary small" id="share">${ICON.share(16)} ${t('shareList')}</button></div>
@@ -1524,15 +1541,17 @@ function paneLibrary(el) {
   if ($('#nudge-export')) $('#nudge-export').onclick = () => { exportBackup(); db.settings.backupNudgeAt = Date.now(); save(); };
   if ($('#nudge-later')) $('#nudge-later').onclick = () => { db.settings.backupNudgeAt = Date.now(); save(); $('.nudge')?.remove(); };
   refresh();
-  $('#lg').onchange = (e) => { libGroup = e.target.value; libCreator = ALL; drawCreators(); draw(); };
+  $('#lg').onchange = (e) => { libGroup = e.target.value; libCreator = ALL; libSeries = ALL; drawCreators(); drawSeries(); draw(); };
   // 分享：勾选了视频就分享勾选的，否则分享当前筛选出来的
   $('#share').onclick = () => {
     const list = sel.size ? db.videos.filter((v) => sel.has(v.id)) : filtered();
     if (!list.length) return toast(t('shareEmpty'));
     const cname = libCreator !== ALL ? creatorsOf(list).find((c) => c.key === libCreator)?.name : '';
-    shareDialog(list, libGroup !== ALL ? libGroup : cname || t('myList'));
+    const sname = libSeries !== ALL && libSeries !== NONE ? list.find((v) => v.series?.id === libSeries)?.series.title : '';
+    shareDialog(list, sname || (libGroup !== ALL ? libGroup : cname || t('myList')));
   };
-  $('#lc').onchange = (e) => { libCreator = e.target.value; draw(); };
+  $('#lc').onchange = (e) => { libCreator = e.target.value; libSeries = ALL; drawSeries(); draw(); };
+  $('#ls').onchange = (e) => { libSeries = e.target.value; draw(); };
   const byRow = (e) => db.videos.find((x) => x.id === e.target.closest('tr')?.dataset.id);
   $('#lq').oninput = (e) => { q = e.target.value.trim().toLowerCase(); draw(); };
   $('#libbody').addEventListener('change', (e) => {
