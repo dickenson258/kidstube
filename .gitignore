@@ -3,3 +3,4 @@ node_modules/
 .claude/
 promo/
 promo-x.md
+dist/

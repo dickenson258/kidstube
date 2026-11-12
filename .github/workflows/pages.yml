@@ -1,4 +1,4 @@
-# 把 public/ 目录发布到 GitHub Pages（纯静态，无构建步骤）
+# 构建 dist/（scripts/build.mjs）并发布到 GitHub Pages
 name: Deploy to GitHub Pages
 on:
   push:
@@ -19,9 +19,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/build.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: dist
       - id: deployment
         uses: actions/deploy-pages@v4

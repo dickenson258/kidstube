@@ -7,16 +7,34 @@
   <meta name="kidstube-app" content="1" />
   <meta name="description" content="朵米片单（DomiBuddy Lists）：家长精选的儿童视频片单，只看家长挑选的视频" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="preload" href="icon.svg" as="image" type="image/svg+xml" />
   <link rel="stylesheet" href="style.css" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="dns-prefetch" href="https://api.domibuddy.com" />
   <meta name="theme-color" content="#ff7a59" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="朵米片单" />
+  <!-- 首屏占位：脚本下载完之前先显示朵米，避免白屏（不依赖 style.css） -->
+  <style>
+    .boot { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #fff8ef; color: #7a7383; font: 15px/1.5 "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif; }
+    @media (prefers-color-scheme: dark) { .boot { background: #1d1a22; color: #a69fb0; } .boot .ink { stroke: #f4eef8; fill: #f4eef8; } }
+    .boot svg { animation: boot-float 2.4s ease-in-out infinite; }
+    @keyframes boot-float { 50% { transform: translateY(-6px); } }
+    @media (prefers-reduced-motion: reduce) { .boot svg { animation: none; } }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><div class="boot" aria-busy="true">
+    <svg width="84" height="98" viewBox="0 0 120 140" aria-hidden="true">
+      <g class="ink" fill="none" stroke="#1c1b20" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M28 88 Q22 91 16 96"/><path d="M91 84 Q100 79 101 68"/><path d="M50 112 V128 H43"/><path d="M70 112 V128 H77"/></g>
+      <circle class="ink" cx="16" cy="96" r="2.6" fill="#1c1b20"/><circle class="ink" cx="101" cy="68" r="2.6" fill="#1c1b20"/>
+      <path d="M66.5 40.1 L101.5 100.7 Q108 112 95 112 L25 112 Q12 112 18.5 100.7 L53.5 40.1 Q60 28.9 66.5 40.1 Z" fill="#0a5cff"/>
+      <g fill="#111"><ellipse cx="53.5" cy="66" rx="2.5" ry="4.2"/><ellipse cx="66.5" cy="66" rx="2.5" ry="4.2"/></g>
+    </svg>
+    <div>正在打开朵米片单… · Opening…</div>
+  </div></div>
   <div id="modal-root"></div>
   <div id="toast"></div>
   <script type="module" src="app.js"></script>

@@ -1,5 +1,5 @@
-# Cloudflare Pages 部署配置：KidsTube 是纯静态网站，直接发布 public/ 目录。
+# Cloudflare Pages 部署配置：发布构建好的 dist/（先运行 node scripts/build.mjs）。
 # 部署：npx wrangler pages deploy（首次需要 npx wrangler login）
 name = "domibuddy"
-pages_build_output_dir = "public"
+pages_build_output_dir = "dist"
 compatibility_date = "2026-11-01"

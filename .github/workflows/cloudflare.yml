@@ -1,4 +1,4 @@
-# 推送到 main 后，把 public/ 发布到 Cloudflare Pages（项目 domibuddy，配置见 wrangler.toml）
+# 推送到 main 后，构建 dist/（scripts/build.mjs）并发布到 Cloudflare Pages（项目 domibuddy，配置见 wrangler.toml）
 # 需要：仓库 Secret CLOUDFLARE_API_TOKEN（权限：Account → Cloudflare Pages → Edit）
 #       仓库 Variable CLOUDFLARE_ACCOUNT_ID
 name: Deploy to Cloudflare Pages
@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Build (bundle + minify + version stamps)
+        run: node scripts/build.mjs
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

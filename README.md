@@ -40,7 +40,7 @@ DomiBuddy Lists puts one list in front of the child: only the videos the parent 
 DomiBuddy Lists is just the static files in the `public/` folder:
 
 - **Local preview:** `npm start` (Node 18+, no dependencies), then open <http://localhost:5173>. Devices on the same Wi-Fi can use the LAN address it prints.
-- **Deployment:** upload `public/` to any static host, such as GitHub Pages, Cloudflare Pages, Vercel, or Nginx. Subdirectory deployment is supported. HTTPS is recommended.
+- **Deployment:** run `node scripts/build.mjs` (bundles and minifies the scripts and adds version stamps for long-term caching; needs network access for `npx esbuild`), then upload `dist/` to any static host, such as GitHub Pages, Cloudflare Pages, Vercel, or Nginx. Uploading `public/` as is also works, just loads slower. Subdirectory deployment is supported. HTTPS is recommended.
 
 ## DomiBuddy Helper (userscript)
 
@@ -144,7 +144,7 @@ server.js                       Optional local preview server (static files only
 朵米片单就是 `public/` 文件夹里的静态文件：
 
 - **本地预览：** `npm start`（Node 18+，无依赖），然后打开 <http://localhost:5173>。同一 Wi-Fi 下的设备可以用它打印出的局域网地址访问。
-- **部署：** 把 `public/` 上传到任意静态托管，比如 GitHub Pages、Cloudflare Pages、Vercel 或 Nginx。支持子目录部署，建议使用 HTTPS。
+- **部署：** 先运行 `node scripts/build.mjs`（把脚本打包压缩，并加上版本号以便长期缓存；需要联网下载 esbuild），再把 `dist/` 上传到任意静态托管，比如 GitHub Pages、Cloudflare Pages、Vercel 或 Nginx。直接上传 `public/` 也能用，只是打开会慢一些。支持子目录部署，建议使用 HTTPS。
 
 ### 朵米助手（油猴脚本）
 
