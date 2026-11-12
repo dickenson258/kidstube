@@ -163,7 +163,7 @@ function domi(pose = 'idle', size = 120, label = '') {
       <g fill="none" stroke="var(--domi-ink)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
         <path class="domi-arm-l" d="${l}"/><path class="domi-arm-r" d="${r}"/>${legs}
       </g>
-      <circle cx="${lh[0]}" cy="${lh[1]}" r="3.6" fill="var(--domi-ink)"/><circle class="domi-hand-r" cx="${rh[0]}" cy="${rh[1]}" r="3.6" fill="var(--domi-ink)"/>
+      <circle cx="${lh[0]}" cy="${lh[1]}" r="2.6" fill="var(--domi-ink)"/><circle class="domi-hand-r" cx="${rh[0]}" cy="${rh[1]}" r="2.6" fill="var(--domi-ink)"/>
       <path d="M66.5 40.1 L101.5 100.7 Q108 112 95 112 L25 112 Q12 112 18.5 100.7 L53.5 40.1 Q60 28.9 66.5 40.1 Z" fill="#0a5cff"/>
       <g class="domi-eyes" fill="#111"><ellipse cx="53.5" cy="66" rx="2.5" ry="4.2"/><ellipse cx="66.5" cy="66" rx="2.5" ry="4.2"/></g>
     </g>
