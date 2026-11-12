@@ -383,3 +383,10 @@ button, a, .card, .pick { -webkit-tap-highlight-color: transparent; }
 .device-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .device-name { font-weight: 700; }
 .pair-roles { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 6px 0 12px; }
+
+/* 恢复码 / 提醒 */
+.rc-code { font: 700 21px/1.5 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .5px; text-align: center; background: var(--surface-2); border: 2px dashed var(--brand); border-radius: 14px; padding: 16px 10px; margin: 12px 0; word-break: normal; overflow-wrap: normal; user-select: all; }
+.recover-form { display: flex; gap: 10px; max-width: 520px; margin: 18px auto 0; flex-wrap: wrap; justify-content: center; }
+.recover-form .field { flex: 1 1 300px; font-family: ui-monospace, "SF Mono", Menlo, monospace; text-transform: uppercase; }
+.tip-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--brand-soft); font-size: 14px; flex-wrap: wrap; }
+.panel.nudge { border: 2px solid var(--brand-soft); }

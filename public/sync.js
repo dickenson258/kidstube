@@ -152,6 +152,7 @@ export async function enableSync() {
   lastPrint = print(snap);
   initSync(hooks);
   status('ok');
+  try { return await newRecoveryCode(); } catch { return null; }
 }
 
 // 家长设备生成邀请链接（role：child 孩子设备 / parent 家长的另一台设备）
@@ -171,6 +172,65 @@ export async function joinSync(code) {
   const r = await call('POST', '/devices', { invite, name: deviceName() }, { auth: false });
   if (r.status !== 200) { cfg = prev; derived = null; throw new Error(r.error || 'HTTP ' + r.status); }
   Object.assign(cfg, { deviceId: r.deviceId, token: r.token, role: r.role });
+  saveCfg();
+  const g = await call('GET');
+  if (g.status !== 200) throw new Error(g.error || 'HTTP ' + g.status);
+  const snap = await decrypt(g.ciphertext);
+  applying = true;
+  try { hooks.applyRemote(snap); } finally { applying = false; }
+  cfg.version = g.version; cfg.at = g.updatedAt; saveCfg();
+  lastPrint = print(snapshot(hooks.getDb()));
+  initSync(hooks);
+}
+
+// ---------------------------------------------------------------- 恢复码
+// 形如 DOMI-7K3P-QX9M-2RTW-H8VN-5CJA（20 个字符，100 位随机）。由它派生：
+//   rid：服务器查找用的编号（服务器再取一次哈希保存）
+//   包装密钥：PBKDF2 → AES-GCM，用来加密同步密钥后存到服务器
+// 服务器只有 rid 的哈希和包装后的密钥，没有恢复码就解不开。
+const RC_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 去掉了容易看错的 0 O 1 I
+const RC_SALT = new TextEncoder().encode('domibuddy-recovery-v1');
+export function normalizeRecovery(input) {
+  const s = String(input || '').toUpperCase().replace(/^\s*DOMI[-\s]*/, '').replace(/[^A-Z0-9]/g, '');
+  return s.length === 20 && [...s].every((c) => RC_ALPHABET.includes(c)) ? s : null;
+}
+export const formatRecovery = (n) => 'DOMI-' + n.match(/.{4}/g).join('-');
+async function rcKeys(n) {
+  const rid = hex(await digest('rid', n));
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(n), 'PBKDF2', false, ['deriveKey']);
+  const wrap = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: RC_SALT, iterations: 200000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  return { rid, wrap };
+}
+// 家长设备：生成（或重新生成）恢复码；旧的立即作废
+export async function newRecoveryCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  const n = Array.from(bytes, (b) => RC_ALPHABET[b & 31]).join('');
+  const { rid, wrap } = await rcKeys(n);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrap, new TextEncoder().encode(cfg.key)));
+  const out = new Uint8Array(12 + ct.length);
+  out.set(iv); out.set(ct, 12);
+  const r = await call('PUT', '/recovery', { rid, wrapped: b64(out) });
+  if (r.status !== 200) throw new Error(r.error || 'HTTP ' + r.status);
+  cfg.recovery = formatRecovery(n);
+  saveCfg();
+  return cfg.recovery;
+}
+export const recoveryCode = () => cfg?.recovery || null;
+// 新设备：用恢复码找回，成为家长设备，下载片单
+export async function recoverWithCode(input) {
+  const n = normalizeRecovery(input);
+  if (!n) throw new Error('bad_code');
+  const { rid, wrap } = await rcKeys(n);
+  const r = await fetch(API.replace(/sync\/$/, 'recover'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rid, name: deviceName() }) });
+  let d = {};
+  try { d = await r.json(); } catch {}
+  if (r.status !== 200) throw new Error(d.error || 'HTTP ' + r.status);
+  const raw = unb64(d.wrapped);
+  const key = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw.slice(0, 12) }, wrap, raw.slice(12)));
+  derived = null;
+  if ((await keys(key)).id !== d.syncId) throw new Error('bad_code');
+  cfg = { key, deviceId: d.deviceId, token: d.token, role: 'parent', version: 0, at: null, recovery: formatRecovery(n) };
   saveCfg();
   const g = await call('GET');
   if (g.status !== 200) throw new Error(g.error || 'HTTP ' + g.status);

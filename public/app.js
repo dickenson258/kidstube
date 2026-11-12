@@ -248,6 +248,8 @@ function route() {
   if (page === 'watch') return renderWatch(arg);
   if (page === 'series') return renderSeries(decodeURIComponent(arg || ''));
   if (page === 'import') return renderImport(arg);
+  if (page === 's') return renderShort(arg);
+  if (page === 'recover') return renderRecover();
   if (page === 'pair') return renderPair(arg);
   if (page === 'parent') {
     if (!parentUnlocked) {
@@ -464,6 +466,7 @@ function welcomeGuide() {
       <div class="row"><button class="btn" id="guide-recheck">${t('helperRecheck')}</button></div>
       ${(() => { try { return sessionStorage.getItem('kt-recheck'); } catch { return null; } })() ? `<p class="warn" id="guide-notyet">${t('g_notYet')}</p>` : ''}</details>`}</div></div>
     <div class="welcome-step"><div class="num">3</div><div class="body"><h3>${t('g_s3')}</h3><p class="hint">${t('g_s3body')}</p></div></div>
+    <p class="hint" style="text-align:center;margin-top:18px">${t('g_recover')} <a href="#/recover">${t('recoverLink')} →</a></p>
   </div>`;
 }
 // 助手装好后，首页的指引自动更新
@@ -1239,6 +1242,22 @@ async function decodeList(s) {
   if (!Array.isArray(d?.i)) throw new Error('bad list');
   return { title: String(d.n || '').slice(0, 80), videos: d.i.filter((o) => o && o.p && o.v).map(unpackVideo).filter(shareable) };
 }
+// 短链接：片单内容（公开信息，不含家庭信息）保存到服务器，得到 lists.domibuddy.com/l/xxxxxxxx
+const LISTS_API = 'https://api.domibuddy.com/v1/lists';
+const shortCache = new Map();
+async function shortLink(code, title, videos) {
+  const key = code + '|' + title;
+  if (shortCache.has(key)) return shortCache.get(key);
+  try {
+    const thumb = videos.map((v) => v.thumb).find((u) => /^https:\/\//.test(u || '')) || '';
+    const r = await fetch(LISTS_API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, title, count: videos.length, thumb }) });
+    if (!r.ok) return null;
+    const { id } = await r.json();
+    const url = `https://lists.domibuddy.com/l/${id}`;
+    shortCache.set(key, url);
+    return url;
+  } catch { return null; }
+}
 const shareUrl = (code) => `${location.origin}${location.pathname}#/import/${code}`;
 const QR_MAX = 1800; // 再长的二维码手机很难扫出来
 async function qrSvg(text) {
@@ -1257,13 +1276,21 @@ function shareDialog(videos, defaultTitle) {
     <label class="share-label">${t('shareName')}<input class="field" id="sh-name" value="${esc(defaultTitle)}" maxlength="80"></label>
     <div class="share-qr" id="sh-qr"></div>
     <p class="hint share-qr-note" id="sh-qrnote"></p>
-    <textarea class="field share-link" id="sh-link" readonly rows="3"></textarea>
+    <textarea class="field share-link" id="sh-link" readonly rows="2"></textarea>
+    <p class="hint" id="sh-shortnote" style="margin:6px 0 0"></p>
     <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button>${navigator.share ? `<button class="btn" id="sh-native">${t('shareSystem')}</button>` : ''}<button class="btn primary" id="sh-copy">${t('copyLink')}</button></div>`, (dlg, close) => {
-    let link = '';
+    let link = '', seq = 0;
     const build = async () => {
+      const my = ++seq;
       const n = $('#sh-name', dlg).value.trim() || defaultTitle;
-      link = shareUrl(await encodeList({ n, i: ok.map((v) => packVideo(v)) }));
+      const code = await encodeList({ n, i: ok.map((v) => packVideo(v)) });
+      // 优先用短链接（微信等聊天软件里能显示标题和封面的预览卡片）；连不上服务器时用长链接
+      $('#sh-link', dlg).value = t('shareMaking');
+      const short = await shortLink(code, n, ok);
+      if (my !== seq) return;
+      link = short || shareUrl(code);
       $('#sh-link', dlg).value = link;
+      $('#sh-shortnote', dlg).textContent = short ? t('shareShortHint') : t('shareLongHint');
       // 二维码：完整链接太长时去掉封面和频道名（导入后会自动补上封面），还是太长就提示分成几个小片单
       let qrLink = link.length <= QR_MAX ? link : shareUrl(await encodeList({ n, i: ok.map((v) => packVideo(v, true)) }));
       if (qrLink.length > QR_MAX) {
@@ -1275,7 +1302,7 @@ function shareDialog(videos, defaultTitle) {
       }
     };
     let timer;
-    $('#sh-name', dlg).oninput = () => { clearTimeout(timer); timer = setTimeout(build, 300); };
+    $('#sh-name', dlg).oninput = () => { clearTimeout(timer); timer = setTimeout(build, 800); };
     $('[data-a="close"]', dlg).onclick = close;
     $('#sh-copy', dlg).onclick = async () => {
       try { await navigator.clipboard.writeText(link); } catch { $('#sh-link', dlg).select(); document.execCommand('copy'); }
@@ -1287,7 +1314,18 @@ function shareDialog(videos, defaultTitle) {
 }
 
 // 打开分享链接：预览片单，家长输入密码后导入
-async function renderImport(code) {
+// 短链接 #/s/<id>：从服务器取回片单再显示导入页
+async function renderShort(id) {
+  app.innerHTML = topbar() + `<main class="wrap rest"><div class="spin dark" style="margin:40px auto"></div></main>`;
+  bindTopbar();
+  try {
+    const r = await fetch(`${LISTS_API}/${encodeURIComponent(id || '')}`);
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    return renderImport(d.code, id);
+  } catch { return renderImport('', id); }
+}
+async function renderImport(code, listId) {
   let list;
   try { list = await decodeList(code || ''); } catch { list = null; }
   if (!list || !list.videos.length) {
@@ -1319,6 +1357,7 @@ async function renderImport(code) {
     db.videos.unshift(...added);
     save();
     toast(t('importedN', added.length));
+    if (listId) fetch(`${LISTS_API}/${encodeURIComponent(listId)}/imported`, { method: 'POST' }).catch(() => {});
     location.hash = '#/';
     backfillThumbs(added);
   };
@@ -1390,7 +1429,10 @@ function paneLibrary(el) {
     refresh();
     return before - db.videos.length;
   };
-  el.innerHTML = `<div class="panel"><h2>${t('libTitle')} <span class="badge" id="libcnt"></span></h2>
+  const nudge = !S.syncOn() && db.videos.length >= 10 && Date.now() - (db.settings.backupNudgeAt || 0) > 14 * 864e5;
+  el.innerHTML = `${nudge ? `<div class="panel nudge"><div class="row"><div class="grow"><b>${t('nudgeTitle')}</b><p class="hint" style="margin:4px 0 0">${t('nudgeBody', db.videos.length)}</p></div></div>
+      <div class="row" style="margin-top:10px"><a class="btn primary small" href="#/parent/settings">${t('syncEnable')}</a><button class="btn small" id="nudge-export">${t('exportBtn')}</button><div class="spacer"></div><button class="btn small" id="nudge-later">${t('later')}</button></div></div>` : ''}
+    <div class="panel"><h2>${t('libTitle')} <span class="badge" id="libcnt"></span></h2>
     <p class="hint">${t('libHint')}</p>
     <div class="row" style="margin-bottom:10px">
       <select class="field" id="lg" style="width:auto"></select>
@@ -1403,6 +1445,8 @@ function paneLibrary(el) {
       <div class="spacer"></div><button class="btn danger-solid small" id="delsel"></button></div>
     <div class="table-wrap"><table class="lib"><tbody id="libbody"></tbody></table></div></div>`;
   if (libGroup !== ALL && !db.groups.includes(libGroup)) libGroup = ALL;
+  if ($('#nudge-export')) $('#nudge-export').onclick = () => { exportBackup(); db.settings.backupNudgeAt = Date.now(); save(); };
+  if ($('#nudge-later')) $('#nudge-later').onclick = () => { db.settings.backupNudgeAt = Date.now(); save(); $('.nudge')?.remove(); };
   refresh();
   $('#lg').onchange = (e) => { libGroup = e.target.value; libCreator = ALL; drawCreators(); draw(); };
   // 分享：勾选了视频就分享勾选的，否则分享当前筛选出来的
@@ -1660,12 +1704,12 @@ function syncStatusText() {
 function syncPanel() {
   if (!S.syncSupported()) return `<div class="panel"><h2>${t('syncTitle')}</h2><p class="hint">${t('syncNeedHttps')}</p></div>`;
   if (!S.syncOn()) return `<div class="panel"><h2>${t('syncTitle')} <span class="badge">${t('syncBeta')}</span></h2>
-    <p class="hint">${t('syncIntro')}</p><button class="btn primary" id="sync-on">${t('syncEnable')}</button></div>`;
+    <p class="hint">${t('syncIntro')}</p><div class="row"><button class="btn primary" id="sync-on">${t('syncEnable')}</button><a class="btn" href="#/recover">${t('recoverLink')}</a></div></div>`;
   const parent = S.isParentDevice();
   return `<div class="panel"><h2>${t('syncTitle')} <span class="badge ok">${t('syncIsOn')}</span> <span class="badge">${parent ? t('roleParent') : t('roleChild')}</span></h2>
     <p class="hint" id="sync-status">${esc(syncStatusText())}</p>
     ${parent ? `<h3>${t('devTitle')}</h3><div id="sync-devices" class="device-list"><p class="hint">${t('devLoading')}</p></div>` : `<p class="hint">${t('devChildNote')}</p>`}
-    <div class="row">${parent ? `<button class="btn primary" id="sync-add">${t('syncAddDevice')}</button>` : ''}<button class="btn" id="sync-now">${t('syncNow')}</button>
+    <div class="row">${parent ? `<button class="btn primary" id="sync-add">${t('syncAddDevice')}</button><button class="btn" id="sync-rc">${t('rcButton')}</button>` : ''}<button class="btn" id="sync-now">${t('syncNow')}</button>
       <div class="spacer"></div><button class="btn small" id="sync-leave">${t('syncLeave')}</button>${parent ? `<button class="btn danger small" id="sync-del">${t('syncDelete')}</button>` : ''}</div></div>`;
 }
 async function drawDevices(el) {
@@ -1677,7 +1721,9 @@ async function drawDevices(el) {
   box.innerHTML = d.devices.map((v) => `<div class="device-row" data-id="${esc(v.id)}">
       <div class="grow"><div class="device-name">${esc(v.name)}${v.id === d.self ? ` <span class="badge ok">${t('devThis')}</span>` : ''}</div>
         <div class="hint" style="margin:0">${v.role === 'parent' ? t('roleParent') : t('roleChild')} · ${t('devLastSeen', fmtSyncTime(v.lastSeen))}</div></div>
-      <button class="btn small" data-rename>${t('devRename')}</button>${v.id === d.self ? '' : `<button class="btn danger small" data-remove>${t('devRemove')}</button>`}</div>`).join('');
+      <button class="btn small" data-rename>${t('devRename')}</button>${v.id === d.self ? '' : `<button class="btn danger small" data-remove>${t('devRemove')}</button>`}</div>`).join('')
+    + (d.devices.filter((v) => v.role === 'parent').length < 2 ? `<div class="tip-row"><span class="grow">${t('devOneParent')}</span><button class="btn small" id="add-parent">${t('pairParent')}</button></div>` : '');
+  if ($('#add-parent', box)) $('#add-parent', box).onclick = () => showPairDialog('parent');
   box.querySelectorAll('[data-rename]').forEach((b) => (b.onclick = () => {
     const row = b.closest('.device-row'), cur = d.devices.find((x) => x.id === row.dataset.id);
     modal(`<h2>${t('devRename')}</h2><input class="field" id="dev-name" maxlength="40" value="${esc(cur.name)}">
@@ -1707,11 +1753,18 @@ function bindSyncPanel(el) {
   drawDevices(el);
   on('sync-on', async (e) => {
     e.currentTarget.disabled = true;
-    try { await S.enableSync(); } catch (err) { toast(t('syncErr', err.message)); e.currentTarget.disabled = false; return; }
+    let code;
+    try { code = await S.enableSync(); } catch (err) { toast(t('syncErr', err.message)); e.currentTarget.disabled = false; return; }
     renderParent('settings');
-    showPairDialog();
+    if (code) showRecoveryDialog(code, () => showPairDialog());
+    else showPairDialog();
   });
-  on('sync-add', showPairDialog);
+  on('sync-add', () => showPairDialog());
+  on('sync-rc', async () => {
+    const code = S.recoveryCode();
+    if (code) return showRecoveryDialog(code);
+    try { showRecoveryDialog(await S.newRecoveryCode()); } catch (err) { toast(t('syncErr', err.message)); }
+  });
   on('sync-now', async () => { await S.syncNow(); toast(syncState.state === 'error' ? syncStatusText() : t('syncDone')); });
   on('sync-leave', async () => {
     if (!(await confirmBox({ title: t('syncLeave'), body: t('syncLeaveBody'), ok: t('syncLeave') }))) return;
@@ -1724,7 +1777,7 @@ function bindSyncPanel(el) {
   });
 }
 // 添加设备：先选是孩子的设备还是家长的另一台设备，再生成一次性邀请二维码
-function showPairDialog() {
+function showPairDialog(preset) {
   modal(`<h2>${t('syncAddDevice')}</h2><p class="hint">${t('pairWhich')}</p>
     <div class="pair-roles"><button class="btn primary" data-role="child">${t('pairChild')}</button><button class="btn" data-role="parent">${t('pairParent')}</button></div>
     <div id="pair-out"></div>
@@ -1743,7 +1796,59 @@ function showPairDialog() {
       qrSvg(inv.link).then((svg) => ($('#pair-qr', dlg).innerHTML = svg)).catch(() => {});
       $('#pair-copy', dlg).onclick = async () => { try { await navigator.clipboard.writeText(inv.link); toast(t('linkCopied')); } catch { toast(inv.link); } };
     }));
+    if (preset) dlg.querySelector(`[data-role="${preset}"]`)?.click();
   });
+}
+// 恢复码：开启同步时显示一次，之后在设置里可以查看或重新生成
+function showRecoveryDialog(code, after) {
+  modal(`<h2>${t('rcTitle')}</h2><p class="hint">${t('rcIntro')}</p>
+    <div class="rc-code" id="rc-code">${esc(code)}</div>
+    <div class="row" style="justify-content:center"><button class="btn" id="rc-copy">${t('rcCopy')}</button><button class="btn" id="rc-dl">${t('rcDownload')}</button></div>
+    <p class="warn" style="margin:12px 0">${t('rcWarn')}</p>
+    <div class="row confirm-acts"><button class="btn small" id="rc-new">${t('rcRegen')}</button><div class="spacer"></div><button class="btn primary" id="rc-ok">${t('rcSaved')}</button></div>`, (dlg, close) => {
+    const done = () => { close(); after?.(); };
+    $('#rc-ok', dlg).onclick = done;
+    $('#rc-copy', dlg).onclick = async () => { try { await navigator.clipboard.writeText(code); toast(t('rcCopied')); } catch { toast(code); } };
+    $('#rc-dl', dlg).onclick = () => {
+      const text = `${t('rcFileTitle')}\n\n${code}\n\n${t('rcFileBody')}\nhttps://lists.domibuddy.com/#/recover\n`;
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: 'domibuddy-recovery-code.txt' });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    $('#rc-new', dlg).onclick = async () => {
+      if (!(await confirmBox({ title: t('rcRegen'), body: t('rcRegenBody'), ok: t('rcRegen') }))) return;
+      try { code = await S.newRecoveryCode(); $('#rc-code', dlg).textContent = code; toast(t('rcRegenDone')); } catch (err) { toast(t('syncErr', err.message)); }
+    };
+  });
+}
+// 用恢复码找回：新设备（或重置后的设备）恢复成家长设备
+function renderRecover() {
+  app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${domi('wave', 100, t('domiName'))}</div>
+    <h1>${t('recoverTitle')}</h1><p class="hint">${t('recoverBody')}</p>
+    ${S.syncSupported() ? `<div class="recover-form"><input class="field" id="rc-in" placeholder="DOMI-XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button class="btn primary" id="rc-go">${t('recoverGo')}</button></div>
+      ${S.syncOn() ? `<p class="warn">${t('recoverReplace')}</p>` : ''}` : `<p class="warn">${t('syncNeedHttps')}</p>`}
+    <p style="margin-top:18px"><a href="#/">${t('back')}</a></p></main>`;
+  bindTopbar();
+  if (!$('#rc-go')) return;
+  const go = async () => {
+    const v = $('#rc-in').value;
+    if (!S.normalizeRecovery(v)) return toast(t('recoverBad'));
+    if (db.settings.pinHash && !(await unlockParent())) return;
+    const btn = $('#rc-go');
+    btn.disabled = true; btn.textContent = t('recoverBusy');
+    try {
+      if (S.syncOn()) await S.leaveSync();
+      await S.recoverWithCode(v);
+      toast(t('recoverDone'));
+      location.hash = '#/';
+    } catch (err) {
+      btn.disabled = false; btn.textContent = t('recoverGo');
+      toast(err.message === 'not_found' || err.message === 'bad_code' ? t('recoverNotFound') : err.message === 'too_many_attempts' ? t('recoverTooMany') : t('syncErr', err.message));
+    }
+  };
+  $('#rc-go').onclick = go;
+  $('#rc-in').onkeydown = (e) => { if (e.key === 'Enter') go(); };
 }
 // 打开配对链接：本设备用邀请加入家长的同步片单
 async function renderPair(code) {
