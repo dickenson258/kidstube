@@ -1942,13 +1942,19 @@ function renderRecover() {
 }
 // 打开配对链接：本设备用邀请加入家长的同步片单
 async function renderPair(code) {
-  history.replaceState(null, '', location.pathname + location.search + '#/pair'); // 密钥和邀请不留在地址栏和历史记录里
+  // 密钥和邀请不留在地址栏和历史记录里。但在 iPhone/iPad 上先保留到点"加入"为止：
+  // 用控制中心的"扫码器"扫码会在它自己的小浏览器里打开，数据存不到 Safari，需要点"在 Safari 中打开"带着完整链接过去
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const scrub = () => history.replaceState(null, '', location.pathname + location.search + '#/pair');
+  if (!ios || !code) scrub();
   const already = S.syncOn();
   app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${domi('wave', 100, t('domiName'))}</div>
     <h1>${t('pairTitle')}</h1><p class="hint">${already ? t('pairAlready') : t('pairBody', db.videos.length)}</p>
-    <div class="row" style="justify-content:center"><a class="btn" href="#/">${t('cancel')}</a>${!code || !S.syncSupported() ? '' : `<button class="btn primary" id="pair-go">${t('pairJoin')}</button>`}</div>
+    ${ios && code ? `<p class="warn">${t('pairIosScanner')}</p>` : ''}
+    <div class="row" style="justify-content:center"><a class="btn" href="#/" id="pair-cancel">${t('cancel')}</a>${!code || !S.syncSupported() ? '' : `<button class="btn primary" id="pair-go">${t('pairJoin')}</button>`}</div>
     ${S.syncSupported() ? '' : `<p class="warn">${t('syncNeedHttps')}</p>`}</main>`;
   bindTopbar();
+  $('#pair-cancel').onclick = scrub;
   if (!$('#pair-go')) return;
   $('#pair-go').onclick = async (e) => {
     if (db.settings.pinHash && !(await unlockParent())) return;
@@ -1956,6 +1962,7 @@ async function renderPair(code) {
     try {
       if (S.syncOn()) await S.leaveSync();
       await S.joinSync(code);
+      scrub();
       toast(t('pairDone'));
       location.hash = '#/';
     } catch (err) {
