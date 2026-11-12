@@ -890,8 +890,14 @@ const asVideo = (v) => {
 };
 async function single(u, full, { jsonpOk = false } = {}) {
   if (transport) return asVideo(await full());
+  // B 站单个视频可以不经助手读取（JSONP）。偶尔会失败（网络慢、B 站风控）：自动再试一次；
+  // 仍然失败就退回只识别 ID，并把原因带回去，让页面显示"重试"而不是悄悄变成手填标题
+  let why;
   if (jsonpOk) {
-    try { return asVideo(await full()); } catch {}
+    for (let i = 0; i < 2; i++) {
+      try { return asVideo(await full()); } catch (e) { why = e.detail || e.message || e.code; }
+      if (i === 0) await new Promise((r) => setTimeout(r, 800));
+    }
   }
   const off = parseOffline(u.href);
   if (!off) throw fail('NEED_HELPER');
@@ -901,7 +907,7 @@ async function single(u, full, { jsonpOk = false } = {}) {
       return { kind: 'video', video: { ...off, title: o.title, author: o.author_name, thumb: o.thumbnail_url } };
     } catch {}
   }
-  return { kind: 'video', video: off, manual: !off.title };
+  return { kind: 'video', video: off, manual: !off.title, why };
 }
 
 // 播放前重新解析小红书视频地址（地址会过期）
