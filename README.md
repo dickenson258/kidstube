@@ -1,12 +1,14 @@
-# KidsTube
+# DomiBuddy Lists · 朵米片单
 
-**Try it:** <https://dickenson258.github.io/kidstube/> · free, open source (MIT), no sign-up
+*Kids' video lists, picked by parents. A [DomiBuddy](https://domibuddy.com) (朵米伙伴) product, formerly KidsTube.*
+
+**Try it:** <https://lists.domibuddy.com> · free, open source (MIT), no sign-up
 
 A kids' video site where parents choose exactly which videos their children can watch.
 
 English | [中文说明](#中文说明)
 
-![KidsTube on a phone: the kids' home screen, the end-of-video screen with no Up Next, and a Bilibili series in the same list](docs/screens.jpg)
+![DomiBuddy Lists on a phone: the kids' home screen, the end-of-video screen with no Up Next, and a Bilibili series in the same list](docs/screens.jpg)
 
 ## Why
 
@@ -16,13 +18,13 @@ Video apps for kids have three problems for parents:
 - **Ads and unrelated videos.** Pause, and the screen fills with thumbnails that pull the child somewhere else.
 - **Content is scattered.** The good shows are split across YouTube, Bilibili, Tencent Video, Youku and iQIYI, each with its own app.
 
-KidsTube puts one list in front of the child: only the videos the parent added, from any of those sites, in one place.
+DomiBuddy Lists puts one list in front of the child: only the videos the parent added, from any of those sites, in one place.
 
 ## Highlights
 
 - **Whitelist only.** Kids mode shows only videos in the library. The parent area is behind a 4-digit PIN.
 - **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Xigua, Vimeo, direct mp4 / m3u8 links, and videos in your own Baidu Netdisk (with the helper). Import whole collections, playlists, channels or Netdisk folders.
-- **No recommendations or outbound links.** Player logos, titles and end-screen recommendations are covered; an optional per-site sandbox blocks links out of the player. Bilibili videos can play in KidsTube's own player, with no Bilibili recommendations.
+- **No recommendations or outbound links.** Player logos, titles and end-screen recommendations are covered; an optional per-site sandbox blocks links out of the player. Bilibili videos can play in DomiBuddy Lists's own player, with no Bilibili recommendations.
 - **Privacy: data never leaves the device.** No server, no account, no analytics. The list and settings live only in the browser (localStorage); move them to another device with a JSON export.
 - **Daily watch-time limit**, automatic next episode, and memberships you already pay for (sign in to each site in the same browser).
 - **Works on phones and tablets.** Add it to the home screen. Chinese / English.
@@ -35,14 +37,14 @@ KidsTube puts one list in front of the child: only the videos the parent added, 
 
 ## Running and deploying
 
-KidsTube is just the static files in the `public/` folder:
+DomiBuddy Lists is just the static files in the `public/` folder:
 
 - **Local preview:** `npm start` (Node 18+, no dependencies), then open <http://localhost:5173>. Devices on the same Wi-Fi can use the LAN address it prints.
 - **Deployment:** upload `public/` to any static host, such as GitHub Pages, Cloudflare Pages, Vercel, or Nginx. Subdirectory deployment is supported. HTTPS is recommended.
 
-## KidsTube Helper (userscript)
+## DomiBuddy Helper (userscript)
 
-Browser cross-origin restrictions (CORS) stop a web page from reading data from sites such as Bilibili. The **KidsTube Helper** ([`public/kidstube-helper.user.js`](public/kidstube-helper.user.js)) is a userscript. With it installed, cross-origin requests go out through your userscript manager and use your own sign-ins in that browser. You don't need to copy cookies, and no server is involved.
+Browser cross-origin restrictions (CORS) stop a web page from reading data from sites such as Bilibili. The **DomiBuddy Helper** ([`public/kidstube-helper.user.js`](public/kidstube-helper.user.js)) is a userscript. With it installed, cross-origin requests go out through your userscript manager and use your own sign-ins in that browser. You don't need to copy cookies, and no server is involved.
 
 | Device | Browser | Userscript manager |
 | --- | --- | --- |
@@ -50,12 +52,12 @@ Browser cross-origin restrictions (CORS) stop a web page from reading data from 
 | Android | Firefox or Edge (Chrome for Android doesn't support extensions) | Tampermonkey |
 | iPhone / iPad | Safari | Userscripts app (free, open source) |
 
-Installation steps are in KidsTube under 🔒 → Accounts.
+Installation steps are in DomiBuddy Lists under 🔒 → Accounts.
 
 Security design:
 - The helper only runs on pages that contain `<meta name="kidstube-app">`.
 - It only contacts the video sites listed under `@connect`.
-- Each KidsTube address must be allowed by the user in a confirmation dialog the first time.
+- Each DomiBuddy address must be allowed by the user in a confirmation dialog the first time.
 
 ## What works with and without the helper
 
@@ -74,7 +76,7 @@ Security design:
 
 Playback never needs the helper. Embedded YouTube and Bilibili players are loaded by the browser directly.
 
-With the helper installed, Bilibili videos play in KidsTube's own player by default. The helper fetches Bilibili's html5 mp4 address and the browser streams it directly. This works in Firefox for Android, where Bilibili's embedded player can't load video. It also shows no Bilibili recommendations and plays the next episode automatically. Members-only or paid videos fall back to the embedded player. The setting is under Settings.
+With the helper installed, Bilibili videos play in DomiBuddy Lists's own player by default. The helper fetches Bilibili's html5 mp4 address and the browser streams it directly. This works in Firefox for Android, where Bilibili's embedded player can't load video. It also shows no Bilibili recommendations and plays the next episode automatically. Members-only or paid videos fall back to the embedded player. The setting is under Settings.
 
 ## Other features
 
@@ -100,7 +102,7 @@ public/index.html               Entry page
 public/app.js                   Kids mode, player, parent area
 public/resolver.js              In-browser link resolver (also runs in Node for testing)
 public/bridge.js                postMessage bridge between the page and the helper
-public/kidstube-helper.user.js  KidsTube Helper userscript
+public/kidstube-helper.user.js  DomiBuddy Helper userscript
 public/i18n.js                  Chinese / English strings
 public/style.css                Styles
 server.js                       Optional local preview server (static files only)
@@ -110,11 +112,13 @@ server.js                       Optional local preview server (static files only
 
 ## 中文说明
 
-**在线使用：** <https://dickenson258.github.io/kidstube/> · 免费、开源（MIT）、无需注册
+朵米片单（DomiBuddy Lists）是朵米伙伴旗下的产品：家长精选的儿童视频片单。原名 KidsTube。
+
+**在线使用：** <https://lists.domibuddy.com> · 免费、开源（MIT）、无需注册
 
 一个由家长挑选视频的儿童视频站：孩子只能看到你加进白名单的视频。
 
-![KidsTube 手机界面：孩子首页、播完没有推荐的结束画面、同一片单里的 B站合集](docs/screens.jpg)
+![朵米片单手机界面：孩子首页、播完没有推荐的结束画面、同一片单里的 B站合集](docs/screens.jpg)
 
 ### 为什么做这个
 
@@ -124,27 +128,27 @@ server.js                       Optional local preview server (static files only
 - **广告和无关视频太多。** 一暂停，满屏都是别的视频封面，把孩子的注意力拉走。
 - **好内容分散。** 好节目散在 YouTube、B站、腾讯视频、优酷、爱奇艺，每个平台一个 App。
 
-KidsTube 只给孩子一个片单：里面只有家长加进来的视频，不管来自哪个网站，都在同一个地方。
+朵米片单只给孩子一个片单：里面只有家长加进来的视频，不管来自哪个网站，都在同一个地方。
 
 ### 亮点
 
 - **只看白名单。** 孩子模式只显示片单里的视频，家长后台有 4 位密码锁。
 - **一个片单，多个网站。** 支持 YouTube、B站、腾讯视频、优酷、爱奇艺、西瓜视频、Vimeo、mp4 / m3u8 直链，以及你自己百度网盘里的视频（需要助手）。合集、播放列表、频道、网盘文件夹可以整个导入。
-- **没有推荐，点不出去。** 播放器里的标志、标题和结束推荐都会被遮住；每个网站可以单独开启沙盒，屏蔽播放器里的外链。B站视频可以用 KidsTube 自己的播放器播放，没有 B站推荐。
+- **没有推荐，点不出去。** 播放器里的标志、标题和结束推荐都会被遮住；每个网站可以单独开启沙盒，屏蔽播放器里的外链。B站视频可以用朵米片单自己的播放器播放，没有 B站推荐。
 - **隐私：数据不离开设备。** 没有服务器、没有账号、没有统计。片单和设置只存在浏览器里（localStorage），换设备用 JSON 导出 / 导入。
 - **每日观看时长限制**、自动播放下一集，已有的会员照常可用（在同一个浏览器里登录各网站即可）。
 - **手机、平板可用。** 可以添加到主屏幕。支持中文 / 英文。
 
 ### 运行和部署
 
-KidsTube 就是 `public/` 文件夹里的静态文件：
+朵米片单就是 `public/` 文件夹里的静态文件：
 
 - **本地预览：** `npm start`（Node 18+，无依赖），然后打开 <http://localhost:5173>。同一 Wi-Fi 下的设备可以用它打印出的局域网地址访问。
 - **部署：** 把 `public/` 上传到任意静态托管，比如 GitHub Pages、Cloudflare Pages、Vercel 或 Nginx。支持子目录部署，建议使用 HTTPS。
 
-### KidsTube 助手（油猴脚本）
+### 朵米助手（油猴脚本）
 
-浏览器的跨域限制（CORS）不允许网页直接读取 B站等网站的数据。**KidsTube 助手**（[`public/kidstube-helper.user.js`](public/kidstube-helper.user.js)）是一个用户脚本。装好后，跨域请求通过你的脚本管理器发出，使用你在这个浏览器里的登录状态。不需要复制 cookie，也不经过任何服务器。
+浏览器的跨域限制（CORS）不允许网页直接读取 B站等网站的数据。**朵米助手**（[`public/kidstube-helper.user.js`](public/kidstube-helper.user.js)）是一个用户脚本。装好后，跨域请求通过你的脚本管理器发出，使用你在这个浏览器里的登录状态。不需要复制 cookie，也不经过任何服务器。
 
 | 设备 | 浏览器 | 脚本管理器 |
 | --- | --- | --- |
@@ -152,12 +156,12 @@ KidsTube 就是 `public/` 文件夹里的静态文件：
 | 安卓 | Firefox 或 Edge（安卓版 Chrome 不支持扩展） | Tampermonkey |
 | iPhone / iPad | Safari | Userscripts（免费开源 App） |
 
-安装步骤在 KidsTube 的 🔒 → 账号 页面里。
+安装步骤在朵米片单的 🔒 → 账号 页面里。
 
 安全设计：
 - 助手只在包含 `<meta name="kidstube-app">` 的页面上运行。
 - 只访问 `@connect` 里列出的视频网站。
-- 每个 KidsTube 地址第一次使用时，都要用户在确认框里允许。
+- 每个朵米片单地址第一次使用时，都要用户在确认框里允许。
 
 ### 装不装助手的区别
 
@@ -176,7 +180,7 @@ KidsTube 就是 `public/` 文件夹里的静态文件：
 
 播放本身不需要助手，YouTube 和 B站的嵌入播放器由浏览器直接加载。
 
-装了助手后，B站视频默认用 KidsTube 自己的播放器播放：助手获取 B站的 html5 mp4 地址，浏览器直接播放。这样在安卓 Firefox 上也能看（B站嵌入播放器在那里加载不出视频），也没有 B站推荐，并且会自动播放下一集。会员或付费视频会退回到嵌入播放器。这个选项在设置里。
+装了助手后，B站视频默认用朵米片单自己的播放器播放：助手获取 B站的 html5 mp4 地址，浏览器直接播放。这样在安卓 Firefox 上也能看（B站嵌入播放器在那里加载不出视频），也没有 B站推荐，并且会自动播放下一集。会员或付费视频会退回到嵌入播放器。这个选项在设置里。
 
 ### 其他功能
 
@@ -202,7 +206,7 @@ public/index.html               入口页面
 public/app.js                   孩子模式、播放器、家长区
 public/resolver.js              浏览器内的链接解析器（也可以在 Node 里运行测试）
 public/bridge.js                页面和助手之间的 postMessage 通信
-public/kidstube-helper.user.js  KidsTube 助手用户脚本
+public/kidstube-helper.user.js  朵米助手用户脚本
 public/i18n.js                  中文 / 英文文案
 public/style.css                样式
 server.js                       可选的本地预览服务器（只提供静态文件）

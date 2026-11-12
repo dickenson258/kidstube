@@ -1,10 +1,10 @@
-// KidsTube 前端 —— 所有数据只保存在本浏览器 localStorage，不上传任何服务器
+// 朵米片单前端 —— 所有数据只保存在本浏览器 localStorage，不上传任何服务器
 import { DICT } from './i18n.js';
 import * as R from './resolver.js';
 import { detectHelper, onHelper, helperRequest, helperVersion, pingHelper } from './bridge.js';
 import { wrapSourceBuffer } from './h264fix.js';
 
-// 检测到 KidsTube 助手后，跨域请求改由助手发出
+// 检测到朵米助手后，跨域请求改由助手发出
 onHelper(() => R.setTransport(helperRequest));
 detectHelper();
 
@@ -216,7 +216,7 @@ function route() {
   cleanup?.();
   cleanup = null;
   window.scrollTo(0, 0);
-  document.title = 'KidsTube';
+  document.title = t('appTitle');
   const [, page, arg] = location.hash.split('/');
   if (page === 'watch') return renderWatch(arg);
   if (page === 'series') return renderSeries(decodeURIComponent(arg || ''));
@@ -238,7 +238,7 @@ function bindLangBtn() {
 }
 function topbar(extra = '') {
   return `<header class="topbar">
-    <a class="logo" href="#/"><img src="icon.svg" alt=""><span>Kids<b>Tube</b></span></a>
+    <a class="logo" href="#/" aria-label="${esc(t('appName'))}"><img src="icon.svg" alt=""><span>Domi<b>Buddy</b></span><span class="product">${t('product')}</span></a>
     <div class="spacer"></div>${extra}${langBtn()}
     <button class="btn icon-btn" id="parent-btn" title="${t('parentArea')}" aria-label="${t('parentArea')}">${ICON.lock(20)}</button>
   </header>`;
@@ -444,7 +444,7 @@ function renderSeries(id) {
   const eps = seriesEps(id);
   if (!eps.length) { location.hash = '#/'; return; }
   const ser = eps[0].series;
-  document.title = ser.title + ' · KidsTube';
+  document.title = ser.title + ' · ' + t('appName');
   app.innerHTML = topbar() + `<main class="wrap">
       <div class="series-head"><a class="btn" href="#/">${t('back')}</a>
         <div><h1>${esc(ser.title)}</h1><div class="hint" style="margin:0">${esc(eps[0].author || '')} · ${t('episodesN', eps.length)}</div></div></div>
@@ -544,7 +544,7 @@ function openExternal(url, w = 1100, h = 720) {
 }
 
 async function mountPlayer(box, v, onEnded) {
-  // B 站：装了助手就用 KidsTube 自己的播放器（手机 Firefox 也能播、没有 B 站推荐、能自动播放下一集），取不到再用嵌入播放器
+  // B 站：装了助手就用朵米片单自己的播放器（手机 Firefox 也能播、没有 B 站推荐、能自动播放下一集），取不到再用嵌入播放器
   if (v.platform === 'bilibili' && v.playType === 'iframe' && db.settings.biliNative !== false) {
     box.innerHTML = `<div class="msg"><div class="spin"></div><div>${t('loading')}</div></div>`;
     let src = null;
@@ -635,7 +635,7 @@ function mountVideo(box, v, src, onEnded, onFail, { forceHls = false, hlsConfig 
   return () => { video.removeAttribute('src'); video.load(); };
 }
 
-// 百度网盘：助手取播放列表（m3u8），分片也由助手代取（网盘服务器不允许网页直接读取），在 KidsTube 播放器里播放
+// 百度网盘：助手取播放列表（m3u8），分片也由助手代取（网盘服务器不允许网页直接读取），在朵米片单播放器里播放
 async function mountBdpan(box, v, onEnded) {
   const msg = (html) => (box.innerHTML = `<div class="msg">${html}</div>`);
   msg(`<div class="spin"></div><div>${t('loading')}</div>`);
@@ -704,7 +704,7 @@ function renderWatch(id) {
   const v = kidVideos().find((x) => x.id === id);
   if (!v) { location.hash = '#/'; return; }
   if (usage().sec >= limitSec()) return renderRest();
-  document.title = v.title + ' · KidsTube';
+  document.title = v.title + ' · ' + t('appName');
   const eps = v.series ? seriesEps(v.series.id) : [];
   const next = nextEpisode(v);
   // 右侧列表：合集 → 按集数；非合集 → 这个博主的全部视频，顺序和首页为该博主选的排序一致（当前视频高亮）；再列其他视频
@@ -839,7 +839,7 @@ const TABS = ['add', 'library', 'accounts', 'settings'];
 const TAB_LABEL = { add: 'tabAdd', library: 'tabLibrary', accounts: 'tabAccounts', settings: 'tabSettings' };
 function renderParent(tab) {
   if (!TABS.includes(tab)) tab = 'add';
-  app.innerHTML = `<header class="topbar"><a class="logo" href="#/"><img src="icon.svg" alt=""><span>Kids<b>Tube</b></span></a><span class="badge">${t('parentArea')}</span>
+  app.innerHTML = `<header class="topbar"><a class="logo" href="#/" aria-label="${esc(t('appName'))}"><img src="icon.svg" alt=""><span>Domi<b>Buddy</b></span><span class="product">${t('product')}</span></a><span class="badge">${t('parentArea')}</span>
       <div class="spacer"></div>${langBtn()}<button class="btn primary" id="exit">${t('exitKids')}</button></header>
     <main class="wrap admin">
       <nav class="nav">${TABS.map((k) => `<button data-t="${k}" class="${k === tab ? 'on' : ''}">${t(TAB_LABEL[k])}</button>`).join('')}</nav>
@@ -1416,7 +1416,7 @@ async function runSelfTest() {
   const out = $('#testout'), btn = $('#selftest');
   out.hidden = false;
   btn.disabled = true;
-  const lines = [`KidsTube ${location.origin}`, `UA: ${navigator.userAgent}`];
+  const lines = [`DomiBuddy Lists ${location.origin}`, `UA: ${navigator.userAgent}`];
   const show = () => (out.textContent = lines.join('\n'));
   const step = async (label, fn) => {
     lines.push(`… ${label}`);

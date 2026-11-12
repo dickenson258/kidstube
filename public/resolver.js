@@ -1,7 +1,7 @@
-// KidsTube 链接解析器 —— 运行在浏览器中（纯静态网站，无服务器）
+// 朵米片单链接解析器 —— 运行在浏览器中（纯静态网站，无服务器）
 //
 // 浏览器的跨域限制（CORS）让网页无法读取 B 站、小红书等网站的数据。
-// 安装 "KidsTube 助手" 用户脚本后，跨域请求经由脚本管理器发出，并使用家长自己的登录状态。
+// 安装 "朵米助手" 用户脚本后，跨域请求经由脚本管理器发出，并使用家长自己的登录状态。
 // 未安装助手时：单个视频链接仍可直接从链接中识别 ID 并播放（标题由家长填写），
 // YouTube 标题可通过 oEmbed 获取，YouTube 频道可通过 Data API Key 获取。
 //
@@ -910,7 +910,7 @@ export async function xhsStream(url) {
   if (!v.src) throw fail('XHS_NOTE');
   return v.src;
 }
-// B 站：通过助手取 html5 版 mp4 地址，在 KidsTube 自己的 <video> 里播放。
+// B 站：通过助手取 html5 版 mp4 地址，在朵米片单自己的 <video> 里播放。
 // 手机版 Firefox 上 B 站嵌入播放器加载不出视频；而 mp4 服务器接受任何网站的浏览器请求，可以边下边播。
 // 会员 / 付费内容、分段视频或试看片段取不到完整 mp4，调用方会退回嵌入播放器。
 export async function biliStream(v) {

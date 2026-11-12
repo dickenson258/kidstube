@@ -1,4 +1,4 @@
-// 网页 ↔ KidsTube 助手（用户脚本）之间的通信，基于 window.postMessage
+// 网页 ↔ 朵米助手（用户脚本）之间的通信，基于 window.postMessage
 const pending = new Map();
 const waiters = new Set();
 let version = null;

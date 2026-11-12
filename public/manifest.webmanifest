@@ -1,6 +1,6 @@
 {
-  "name": "KidsTube",
-  "short_name": "KidsTube",
+  "name": "朵米片单 DomiBuddy Lists",
+  "short_name": "朵米片单",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#fff8ef",

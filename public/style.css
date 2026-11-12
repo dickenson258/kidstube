@@ -45,6 +45,7 @@ img { display: block; }
 .logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 22px; text-decoration: none; color: var(--text); letter-spacing: -0.5px; }
 .logo img { width: 34px; height: 34px; }
 .logo b { color: var(--brand); }
+.logo .product { font-size: 13px; font-weight: 700; letter-spacing: 0; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
 .spacer { flex: 1; }
 .search { flex: 0 1 320px; min-width: 0; padding: 10px 16px; border-radius: 999px; border: 2px solid var(--line); background: var(--surface); outline: none; }
 .search:focus { border-color: var(--brand); }

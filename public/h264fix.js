@@ -204,7 +204,7 @@ export function wrapSourceBuffer(sb) {
         const b = new Uint8Array(data instanceof ArrayBuffer ? data.slice(0) : data); // 拷一份再改
         if (readInit(b, st)) return orig(b);
         if (st.canon.size) { const f = fixMedia(b, st); if (f !== b) return orig(f); }
-      } catch (e) { st.ok = false; console.warn('[KidsTube] h264fix off:', e?.message || e); }
+      } catch (e) { st.ok = false; console.warn('[DomiBuddy] h264fix off:', e?.message || e); }
     }
     return orig(data);
   };
