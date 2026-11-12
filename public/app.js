@@ -1526,16 +1526,17 @@ function paneLibrary(el) {
       <div class="row" style="margin-top:10px"><a class="btn primary small" href="#/parent/settings">${t('syncEnable')}</a><button class="btn small" id="nudge-export">${t('exportBtn')}</button><div class="spacer"></div><button class="btn small" id="nudge-later">${t('later')}</button></div></div>` : ''}
     <div class="panel"><h2>${t('libTitle')} <span class="badge" id="libcnt"></span></h2>
     <p class="hint">${t('libHint')}</p>
-    <div class="row" style="margin-bottom:10px">
-      <select class="field" id="lg" style="width:auto"></select>
-      <select class="field" id="lc" style="width:auto"></select>
-      <select class="field" id="ls" style="width:auto" hidden></select>
-      <input class="field grow" id="lq" placeholder="${t('libSearch')}">
-      <button class="btn small" id="newg">${t('manageGroups')}</button><button class="btn danger small" id="delall">${t('clearAll')}</button>
-      <button class="btn primary small" id="share">${ICON.share(16)} ${t('shareList')}</button></div>
-    <div class="row bulk" style="margin-bottom:6px">
+    <div class="lib-filters">
+      <select class="field" id="lg" title="${t('allGroups')}"></select>
+      <select class="field" id="lc" title="${t('allCreators')}"></select>
+      <select class="field" id="ls" title="${t('allSeries')}" hidden></select>
+      <input class="field lib-q" id="lq" type="search" placeholder="${t('libSearch')}"></div>
+    <div class="row lib-actions">
       <button class="btn small" id="selall"></button><button class="btn small" id="selnone">${t('selectNone')}</button>
-      <div class="spacer"></div><button class="btn danger-solid small" id="delsel"></button></div>
+      <div class="spacer"></div>
+      <button class="btn primary small" id="share">${ICON.share(16)} ${t('shareList')}</button>
+      <button class="btn small" id="newg">${t('manageGroups')}</button>
+      <button class="btn danger-solid small" id="delsel"></button><button class="btn danger small" id="delall">${t('clearAll')}</button></div>
     <div class="table-wrap"><table class="lib"><tbody id="libbody"></tbody></table></div></div>`;
   if (libGroup !== ALL && !db.groups.includes(libGroup)) libGroup = ALL;
   if ($('#nudge-export')) $('#nudge-export').onclick = () => { exportBackup(); db.settings.backupNudgeAt = Date.now(); save(); };
