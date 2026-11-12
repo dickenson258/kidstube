@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DomiBuddy Helper store images</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif; color: #2d2a32; }
+  .frame { width: 1280px; height: 800px; background: #fff8ef; display: flex; align-items: center; gap: 56px; padding: 0 96px; overflow: hidden; }
+  .frame.tile { width: 440px; height: 280px; padding: 0 28px; gap: 16px; }
+  .domi { flex: none; }
+  h1 { font-size: 52px; margin: 0 0 8px; letter-spacing: -1px; }
+  h1 b { color: #ff7a59; }
+  .sub { font-size: 24px; color: #7a7383; margin: 0 0 36px; }
+  ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 18px; }
+  li { display: flex; align-items: center; gap: 16px; font-size: 26px; font-weight: 700; background: #fff; border-radius: 18px; padding: 18px 24px; box-shadow: 0 6px 20px rgba(120, 80, 40, .10); }
+  li i { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #ffe4d9; color: #ff7a59; font-style: normal; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .note { margin-top: 28px; font-size: 20px; color: #7a7383; }
+  .tile h1 { font-size: 30px; margin: 0 0 6px; }
+  .tile .sub { font-size: 15px; margin: 0; }
+  .tag { display: inline-block; font-size: 14px; font-weight: 700; color: #ff7a59; background: #ffe4d9; border-radius: 999px; padding: 3px 10px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<template id="domi">
+  <svg class="domi" viewBox="0 0 120 140" width="__W__" height="__H__">
+    <g fill="none" stroke="#1c1b20" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M28 88 Q22 91 16 96"/><path d="M91 84 Q100 79 101 68"/><path d="M50 112 V128 H43"/><path d="M70 112 V128 H77"/>
+    </g>
+    <circle cx="16" cy="96" r="3.6" fill="#1c1b20"/><circle cx="101" cy="68" r="3.6" fill="#1c1b20"/>
+    <path d="M66.5 40.1 L101.5 100.7 Q108 112 95 112 L25 112 Q12 112 18.5 100.7 L53.5 40.1 Q60 28.9 66.5 40.1 Z" fill="#0a5cff"/>
+    <g fill="#111"><ellipse cx="53.5" cy="66" rx="2.5" ry="4.2"/><ellipse cx="66.5" cy="66" rx="2.5" ry="4.2"/></g>
+  </svg>
+</template>
+
+<!-- 截图 1：中文 -->
+<section class="frame" id="zh">
+  <span data-domi="300"></span>
+  <div>
+    <span class="tag">朵米片单 · DomiBuddy Lists</span>
+    <h1>朵米助手 <b>DomiBuddy</b></h1>
+    <p class="sub">让家长整理儿童视频片单更省事</p>
+    <ul>
+      <li><i>✓</i>一次导入整个 B 站 UP 主或合集</li>
+      <li><i>✓</i>导入百度网盘文件夹里的视频</li>
+      <li><i>✓</i>自动补全腾讯视频、优酷的标题和封面</li>
+      <li><i>✓</i>只在朵米片单网站上工作，不收集任何数据</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 截图 2：英文 -->
+<section class="frame" id="en">
+  <span data-domi="300"></span>
+  <div>
+    <span class="tag">DomiBuddy Lists · 朵米片单</span>
+    <h1>DomiBuddy <b>Helper</b></h1>
+    <p class="sub">Kids' video lists, picked by parents, made easier</p>
+    <ul>
+      <li><i>✓</i>Import a whole Bilibili channel or collection</li>
+      <li><i>✓</i>Import videos from a Baidu Netdisk folder</li>
+      <li><i>✓</i>Fill in titles and thumbnails automatically</li>
+      <li><i>✓</i>Works only on DomiBuddy sites. Collects no data</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 小宣传图 440×280 -->
+<section class="frame tile" id="tile">
+  <span data-domi="150"></span>
+  <div>
+    <h1>DomiBuddy<br><b style="color:#ff7a59">Helper</b></h1>
+    <p class="sub">朵米助手 · 儿童视频片单好帮手</p>
+  </div>
+</section>
+
+<script>
+  const tpl = document.getElementById('domi').innerHTML;
+  document.querySelectorAll('[data-domi]').forEach((el) => {
+    const w = +el.dataset.domi;
+    el.outerHTML = tpl.replace('__W__', w).replace('__H__', Math.round(w * 7 / 6));
+  });
+</script>
+</body>
+</html>
