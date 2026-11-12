@@ -1034,7 +1034,7 @@ function showSingle(out, v, manual, suggested = '', extra = {}) {
       <div class="thumb">${thumbImg(v)}</div>
       <div class="grow"><div style="font-weight:700;font-size:17px">${esc(v.title || platName(v.platform) + ' · ' + v.vid)}</div>
       <div class="hint">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.duration ? ' · ' + esc(v.duration) : ''}</div>
-      ${warn}${extra.why ? `<p class="warn">${esc(t('autoReadFail', platName(v.platform), extra.why))} <button class="btn small" id="retry">${t('retry')}</button></p>` : manual ? `<p class="hint">${t('manualHint')}</p>` : ''}
+      ${warn}${extra.why ? `<p class="warn">${esc(t(/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? 'autoReadFailMobile' : 'autoReadFail', platName(v.platform), extra.why))} <button class="btn small" id="retry">${t('retry')}</button></p>` : manual ? `<p class="hint">${t('manualHint')}</p>` : ''}
       <input class="field" id="title" value="${esc(v.title || suggested)}" placeholder="${t('titlePlaceholder')}" style="margin-bottom:10px" title="${t('editTitle')}">
       ${extra.collection ? `<div class="collection-box">${ICON.folder(18)}<span class="grow">${esc(t('inCollection', extra.collection.title, extra.collection.videos.length))}</span><button class="btn primary small" id="add-col">${t('addWholeCollection')}</button></div>` : ''}
       ${extra.playlistUrl ? `<div class="collection-box">${ICON.folder(18)}<span class="grow">${t('inPlaylist')}</span><button class="btn small" id="add-pl">${t('addWholePlaylist')}</button></div>` : ''}
