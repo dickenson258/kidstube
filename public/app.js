@@ -249,6 +249,8 @@ function route() {
   if (page === 'series') return renderSeries(decodeURIComponent(arg || ''));
   if (page === 'import') return renderImport(arg);
   if (page === 's') return renderShort(arg);
+  // 短链接页面直接带上了片单内容：#/i/<短链接编号>/<片单>，不用再请求服务器
+  if (page === 'i') return renderImport(location.hash.split('/')[3] || '', arg);
   if (page === 'recover') return renderRecover();
   if (page === 'pair') return renderPair(arg);
   if (page === 'parent') {
