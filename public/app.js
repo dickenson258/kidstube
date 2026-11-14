@@ -239,12 +239,14 @@ async function api(body) {
 // ------------------------------------------------------------ 路由
 const app = $('#app');
 let cleanup = null;
+let pendingPairCode = null;
 function route() {
   cleanup?.();
   cleanup = null;
   window.scrollTo(0, 0);
   document.title = t('appTitle');
   const [, page, arg] = location.hash.split('/');
+  if (page !== 'pair') pendingPairCode = null;
   if (page === 'watch') return renderWatch(arg);
   if (page === 'series') return renderSeries(decodeURIComponent(arg || ''));
   if (page === 'import') return renderImport(arg);
@@ -252,7 +254,8 @@ function route() {
   // 短链接页面直接带上了片单内容：#/i/<短链接编号>/<片单>，不用再请求服务器
   if (page === 'i') return renderImport(location.hash.split('/')[3] || '', arg);
   if (page === 'recover') return renderRecover();
-  if (page === 'pair') return renderPair(arg);
+  if (page === 'join') return renderJoin();
+  if (page === 'pair') return renderPair(arg || pendingPairCode, !!pendingPairCode && !arg);
   if (page === 'parent') {
     if (!parentUnlocked) {
       location.hash = '#/';
@@ -461,6 +464,7 @@ function welcomeGuide() {
   const ver = helperVersion();
   return `<div class="welcome" data-helper="${ver ? 'on' : 'off'}">
     <div class="big"><div class="domi-say">${t('domiHello')}</div>${domi('wave', 104, t('domiName'))}</div><h2>${t('g_title')}</h2><p class="hint">${t('g_intro')}</p>
+    ${S.syncSupported() && !S.syncOn() ? `<p><a class="btn" href="#/join">${t('joinExisting')}</a></p>` : ''}
     <div class="welcome-step"><div class="num">1</div><div class="body"><h3>${t('g_s2')}</h3><p class="hint">${t('g_s2body')}</p>
       <button class="btn primary" id="guide-parent">${t('g_openParent')}</button></div></div>
     <div class="welcome-step"><div class="num">2</div><div class="body"><h3>${t('g_s1')} ${ver ? `<span class="badge ok">${t('helperOn', ver)}</span>` : ''}</h3>
@@ -713,12 +717,16 @@ async function mountBdpan(box, v, onEnded) {
   return () => { done?.(); URL.revokeObjectURL(listUrl); };
 }
 
+const scriptLoads = new Map();
 function loadScript(src) {
-  return new Promise((ok, fail) => {
-    if ([...document.scripts].some((s) => s.src === src)) return ok();
-    const s = Object.assign(document.createElement('script'), { src, onload: ok, onerror: fail });
+  if (scriptLoads.has(src)) return scriptLoads.get(src);
+  const load = new Promise((ok, fail) => {
+    const s = Object.assign(document.createElement('script'), { src, onload: ok });
+    s.onerror = (error) => { scriptLoads.delete(src); s.remove(); fail(error); };
     document.head.appendChild(s);
   });
+  scriptLoads.set(src, load);
+  return load;
 }
 
 // ------------------------------------------------------------ 播放页
@@ -1803,7 +1811,7 @@ function syncPanel() {
     <p class="hint">${t('syncIntro')}</p>
     <div class="beta-rules"><b>${t('betaRulesTitle')}</b><ul>${t('betaRules').map((x) => `<li>${x}</li>`).join('')}</ul></div>
     <p class="hint" id="sync-seats"></p>
-    <div class="row"><button class="btn primary" id="sync-on">${t('syncEnable')}</button><a class="btn" href="#/recover">${t('recoverLink')}</a></div></div>`;
+    <div class="row"><button class="btn primary" id="sync-on">${t('syncEnable')}</button><a class="btn" href="#/join">${t('joinExisting')}</a><a class="btn" href="#/recover">${t('recoverLink')}</a></div></div>`;
   const parent = S.isParentDevice();
   return `<div class="panel"><h2>${t('syncTitle')} <span class="badge ok">${t('syncIsOn')}</span> <span class="badge">${parent ? t('roleParent') : t('roleChild')}</span>${S.syncInfo()?.beta ? ` <span class="badge">${t('betaFamily')}</span>` : ''}</h2>
     <p class="hint" id="sync-status">${esc(syncStatusText())}</p>
@@ -1818,9 +1826,9 @@ async function drawDevices(el) {
   try { d = await S.listDevices(); } catch (e) { box.innerHTML = `<p class="warn">${esc(t('syncErr', e.message))}</p>`; return; }
   if (!box.isConnected) return;
   box.innerHTML = d.devices.map((v) => `<div class="device-row" data-id="${esc(v.id)}">
-      <div class="grow"><div class="device-name">${esc(v.name)}${v.id === d.self ? ` <span class="badge ok">${t('devThis')}</span>` : ''}</div>
+      <div class="device-info"><div class="device-name">${esc(v.name)}${v.id === d.self ? ` <span class="badge ok">${t('devThis')}</span>` : ''}</div>
         <div class="hint" style="margin:0">${v.role === 'parent' ? t('roleParent') : t('roleChild')} · ${t('devLastSeen', fmtSyncTime(v.lastSeen))}</div></div>
-      <button class="btn small" data-rename>${t('devRename')}</button>${v.id === d.self ? '' : `<button class="btn danger small" data-remove>${t('devRemove')}</button>`}</div>`).join('')
+      <div class="device-actions"><button class="btn small" data-rename>${t('devRename')}</button>${v.id === d.self ? '' : `<button class="btn danger small" data-remove>${t('devRemove')}</button>`}</div></div>`).join('')
     + (d.devices.filter((v) => v.role === 'parent').length < 2 ? `<div class="tip-row"><span class="grow">${t('devOneParent')}</span><button class="btn small" id="add-parent">${t('pairParent')}</button></div>` : '');
   if ($('#add-parent', box)) $('#add-parent', box).onclick = () => showPairDialog('parent');
   box.querySelectorAll('[data-rename]').forEach((b) => (b.onclick = () => {
@@ -1855,22 +1863,14 @@ function askFirstSync(btn, start) {
     <div class="first-sync">
       <button class="btn primary" id="fs-new">${t('firstSyncNew')}</button>
       <div class="fs-or">${t('firstSyncHave')}</div>
-      <div class="row"><input class="field grow" id="fs-link" placeholder="${t('firstSyncLinkPh')}" style="padding:9px 12px"><button class="btn" id="fs-join">${t('pairJoin')}</button></div>
-      <p class="hint" style="margin:6px 0 10px">${t('firstSyncLinkHint')}</p>
+      <a class="btn" href="#/join" id="fs-join">${t('joinExisting')}</a>
       <a class="btn" href="#/recover" id="fs-rc">${t('recoverLink')}</a>
     </div>
     <div class="row confirm-acts"><button class="btn" data-a="close">${t('cancel')}</button></div>`, (dlg, close) => {
     $('[data-a="close"]', dlg).onclick = close;
+    $('#fs-join', dlg).onclick = close;
     $('#fs-rc', dlg).onclick = close;
     $('#fs-new', dlg).onclick = () => { close(); start(btn); };
-    const join = () => {
-      const m = $('#fs-link', dlg).value.trim().match(/#\/pair\/([^\s#]+)/);
-      if (!m) { toast(t('pairBadLink')); return $('#fs-link', dlg).focus(); }
-      close();
-      location.hash = '#/pair/' + m[1];
-    };
-    $('#fs-join', dlg).onclick = join;
-    $('#fs-link', dlg).onkeydown = (e) => { if (e.key === 'Enter') join(); };
   });
 }
 function bindSyncPanel(el) {
@@ -1916,18 +1916,26 @@ function showPairDialog(preset) {
     <div class="pair-roles"><button class="btn primary" data-role="child">${t('pairChild')}</button><button class="btn" data-role="parent">${t('pairParent')}</button></div>
     <div id="pair-out"></div>
     <div class="row confirm-acts"><button class="btn" data-a="close">${t('close')}</button></div>`, (dlg, close) => {
+    dlg.classList.add('pair-dialog');
     $('[data-a="close"]', dlg).onclick = close;
+    let request = 0;
     dlg.querySelectorAll('[data-role]').forEach((b) => (b.onclick = async () => {
+      const selected = ++request;
       dlg.querySelectorAll('[data-role]').forEach((x) => x.classList.toggle('primary', x === b));
       const out = $('#pair-out', dlg);
       out.innerHTML = `<p class="hint">${t('devLoading')}</p>`;
       let inv;
-      try { inv = await S.createInvite(location.origin + location.pathname, b.dataset.role); } catch (e) { out.innerHTML = `<p class="warn">${esc(t('syncErr', e.message))}</p>`; return; }
-      out.innerHTML = `<p class="hint">${t(inv.role === 'parent' ? 'pairHintParent' : 'pairHintChild')}</p><div class="share-qr" id="pair-qr"></div>
+      try { inv = await S.createInvite(location.origin + location.pathname, b.dataset.role); } catch (e) {
+        if (selected === request && dlg.isConnected) out.innerHTML = `<p class="warn">${esc(t('syncErr', e.message))}</p>`;
+        return;
+      }
+      if (selected !== request || !dlg.isConnected) return;
+      out.innerHTML = `<p class="hint">${t('pairHow')} ${t(inv.role === 'parent' ? 'pairHintParent' : 'pairHintChild')}</p><div class="share-qr" id="pair-qr"></div>
         <p class="hint share-qr-note">${t('pairOnce', fmtSyncTime(inv.expiresAt))}</p>
         <p class="warn" style="margin:8px 0">${t('syncPairWarn')}</p>
         <div class="row" style="justify-content:center"><button class="btn" id="pair-copy">${t('copyLink')}</button></div>`;
-      qrSvg(inv.link).then((svg) => ($('#pair-qr', dlg).innerHTML = svg)).catch(() => {});
+      const qr = $('#pair-qr', dlg);
+      qrSvg(inv.link).then((svg) => (qr.innerHTML = svg)).catch(() => {});
       $('#pair-copy', dlg).onclick = async () => { try { await navigator.clipboard.writeText(inv.link); toast(t('linkCopied')); } catch { toast(inv.link); } };
     }));
     if (preset) dlg.querySelector(`[data-role="${preset}"]`)?.click();
@@ -1984,25 +1992,138 @@ function renderRecover() {
   $('#rc-go').onclick = go;
   $('#rc-in').onkeydown = (e) => { if (e.key === 'Enter') go(); };
 }
+function pairCodeFromLink(value) {
+  try {
+    const link = new URL(value.trim());
+    if (link.protocol !== 'https:' && link.origin !== location.origin) return null;
+    return link.hash.match(/^#\/pair\/([A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43})$/)?.[1] || null;
+  } catch { return null; }
+}
+
+function renderJoin() {
+  const supported = S.syncSupported();
+  app.innerHTML = topbar() + `<main class="wrap rest join-page">
+    <h1>${t('joinExisting')}</h1>
+    ${supported ? `<p class="hint">${t('joinHint')}</p>
+      <button class="btn primary" id="scan-start">${t('scanStart')}</button>
+      <div id="scan-preview" hidden><video autoplay muted playsinline aria-hidden="true"></video>
+        <button class="btn" id="scan-stop">${t('scanStop')}</button></div>
+      <p class="hint scan-status" id="scan-status" role="status"></p>
+      <form class="join-form" id="join-form">
+        <label for="join-link">${t('firstSyncLinkPh')}</label>
+        <div class="row"><input class="field" id="join-link" type="text" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false">
+          <button class="btn" type="submit">${t('pairJoin')}</button></div>
+        <p class="hint">${t('firstSyncLinkHint')}</p>
+      </form>` : `<p class="warn">${t('syncNeedHttps')}</p>`}
+    <p><a href="#/">${t('back')}</a></p></main>`;
+  bindTopbar();
+  if (!supported) return;
+
+  const form = $('#join-form'), field = $('#join-link');
+  const start = $('#scan-start'), preview = $('#scan-preview'), video = $('video', preview), status = $('#scan-status');
+  let scan = null;
+  const stop = () => {
+    const current = scan;
+    scan = null;
+    if (current) {
+      clearTimeout(current.timer);
+      current.stream?.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
+    preview.hidden = true;
+    start.hidden = false;
+    status.textContent = '';
+  };
+  const confirm = (code) => {
+    stop();
+    pendingPairCode = code;
+    location.hash = '#/pair';
+  };
+  const pause = () => { if (document.hidden) stop(); };
+  document.addEventListener('visibilitychange', pause);
+  window.addEventListener('pagehide', stop);
+  cleanup = () => {
+    stop();
+    document.removeEventListener('visibilitychange', pause);
+    window.removeEventListener('pagehide', stop);
+  };
+  $('#scan-stop').onclick = () => { stop(); start.focus(); };
+  start.onclick = async () => {
+    if (scan) return;
+    if (!navigator.mediaDevices?.getUserMedia) { status.textContent = t('scanUnavailable'); return; }
+    const current = {};
+    scan = current;
+    start.hidden = true;
+    preview.hidden = false;
+    status.textContent = t('scanStarting');
+    const fail = () => {
+      stop();
+      status.textContent = t('scanUnavailable');
+    };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' } } });
+      if (scan !== current) { stream.getTracks().forEach((track) => track.stop()); return; }
+      current.stream = stream;
+      stream.getVideoTracks()[0].addEventListener('ended', () => { if (scan === current) fail(); });
+      video.srcObject = stream;
+      await video.play();
+      // 本地识别，兼容没有原生 BarcodeDetector 的浏览器。只在使用相机时加载。
+      await import(new URL('vendor/jsqr-1.4.0.js', import.meta.url).href);
+      if (scan !== current) return;
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      status.textContent = t('scanAim');
+      const readFrame = () => {
+        if (scan !== current) return;
+        try {
+          if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+            const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+            canvas.width = Math.round(video.videoWidth * scale);
+            canvas.height = Math.round(video.videoHeight * scale);
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+            const result = window.jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: 'dontInvert' });
+            if (result) {
+              const code = pairCodeFromLink(result.data);
+              if (code) { confirm(code); return; }
+              status.textContent = t('scanWrongCode');
+            } else status.textContent = t('scanAim');
+          }
+          current.timer = setTimeout(readFrame, 180);
+        } catch { fail(); }
+      };
+      readFrame();
+    } catch { if (scan === current) fail(); }
+  };
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const code = pairCodeFromLink(field.value);
+    if (code) confirm(code);
+    else { toast(t('pairBadLink')); field.focus(); }
+  };
+}
+
 // 打开配对链接：本设备用邀请加入家长的同步片单
-async function renderPair(code) {
+async function renderPair(code, inApp) {
   // 密钥和邀请不留在地址栏和历史记录里。但在 iPhone/iPad 上先保留到点"加入"为止：
   // 用控制中心的"扫码器"扫码会在它自己的小浏览器里打开，数据存不到 Safari，需要点"在 Safari 中打开"带着完整链接过去
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ios = deviceKind() === 'ios' && !inApp && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches;
   const scrub = () => history.replaceState(null, '', location.pathname + location.search + '#/pair');
   if (!ios || !code) scrub();
   const already = S.syncOn();
   app.innerHTML = topbar() + `<main class="wrap rest"><div class="big">${domi('wave', 100, t('domiName'))}</div>
     <h1>${t('pairTitle')}</h1><p class="hint">${already ? t('pairAlready') : t('pairBody', db.videos.length)}</p>
     ${ios && code ? `<p class="warn">${t('pairIosScanner')}</p>` : ''}
-    <div class="row" style="justify-content:center"><a class="btn" href="#/" id="pair-cancel">${t('cancel')}</a>${!code || !S.syncSupported() ? '' : `<button class="btn primary" id="pair-go">${t('pairJoin')}</button>`}</div>
+    <div class="row" style="justify-content:center"><a class="btn" href="${inApp || !code ? '#/join' : '#/'}" id="pair-cancel">${t('cancel')}</a>${!code || !S.syncSupported() ? '' : `<button class="btn primary" id="pair-go">${t('pairJoin')}</button>`}</div>
     ${S.syncSupported() ? '' : `<p class="warn">${t('syncNeedHttps')}</p>`}</main>`;
   bindTopbar();
   $('#pair-cancel').onclick = scrub;
-  if (!$('#pair-go')) return;
-  $('#pair-go').onclick = async (e) => {
+  const btn = $('#pair-go');
+  if (!btn) return;
+  btn.onclick = async () => {
     if (db.settings.pinHash && !(await unlockParent())) return;
-    e.currentTarget.disabled = true;
+    if (btn.disabled || !btn.isConnected) return;
+    btn.disabled = true;
     try {
       if (S.syncOn()) await S.leaveSync();
       await S.joinSync(code);
@@ -2010,7 +2131,7 @@ async function renderPair(code) {
       toast(t('pairDone'));
       location.hash = '#/';
     } catch (err) {
-      e.currentTarget.disabled = false;
+      btn.disabled = false;
       toast(err.message === 'invite_invalid' ? t('pairUsed') : err.message === 'bad_link' ? t('pairBadLink') : t('syncErr', err.message));
     }
   };
@@ -2024,7 +2145,7 @@ S.initSync({
     save();
     // 孩子正在看视频时不打断；其他页面刷新一下显示新片单
     const page = location.hash.split('/')[1] || '';
-    if (!['watch', 'parent', 'import', 'pair'].includes(page)) route();
+    if (!['watch', 'parent', 'import', 'join', 'pair'].includes(page)) route();
   },
   onStatus(st) {
     syncState = st;
