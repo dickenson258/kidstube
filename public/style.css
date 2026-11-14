@@ -183,6 +183,8 @@ label.inline { display: inline-flex; gap: 8px; align-items: center; cursor: poin
 .shield { position: absolute; z-index: 2; background: transparent; cursor: default; }
 .shield.top { left: 0; right: 0; top: 0; height: max(56px, 14%); }
 .shield.yt-logo { right: 0; bottom: 0; width: 120px; height: 52px; }
+/* B 站手机版弹幕按钮的命中区。片单的全屏按钮会连同遮罩一起放大。 */
+.shield.bili-mobile-danmaku { right: 54px; bottom: 10px; width: 24px; height: 24px; }
 .yt-cover { position: absolute; inset: 0 0 52px 0; z-index: 3; display: grid; place-items: center; background: rgba(0,0,0,.55); }
 .yt-cover[hidden] { display: none; }
 .yt-cover .ended { display: grid; gap: 12px; justify-items: center; color: #fff; font-size: 22px; font-weight: 800; }

@@ -513,7 +513,7 @@ function embedUrl(v) {
   }
   if (v.platform === 'bilibili' && v.playType === 'iframe')
     // 让孩子在 B 站播放器内点击播放，避免浏览器把自动播放降级为静音。
-    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&p=${v.page || 1}&autoplay=0&muted=0&danmaku=0&high_quality=1${v.resumeAt ? `&t=${v.resumeAt}` : ''}`;
+    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&p=${v.page || 1}&autoplay=0&muted=0&danmaku=0&danmakuClosed=true&high_quality=1${v.resumeAt ? `&t=${v.resumeAt}` : ''}`;
   return v.embed;
 }
 
@@ -536,13 +536,16 @@ function sandboxOn(platform) {
 }
 function mountIframe(box, v, onEnded) {
   const s = db.settings;
+  // B 站用这一条件把 iframe 转到手机版。手机版保留了弹幕开关，需单独拦截点击。
+  const biliMobile = v.platform === 'bilibili' && /AppleWebKit.*Mobile.*/.test(navigator.userAgent) && !/Domono/.test(navigator.userAgent);
   // 沙箱（不含 allow-popups / allow-top-navigation）：播放器里指向外网的链接、"在 YouTube 上观看"、推荐卡片等
   // 无法打开新页面或跳转片单所在页面；各平台可在家长设置中单独调整。
   const sandboxed = sandboxOn(v.platform);
   // 有沙箱时外链本来就打不开，不再加透明遮挡（否则会挡住 YouTube 卡片列表的关闭按钮等正常操作）
-  box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture; storage-access"
+  box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; ${biliMobile ? "fullscreen 'none'" : 'fullscreen'}; encrypted-media; picture-in-picture; storage-access"
       referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation allow-storage-access-by-user-activation"' : ''}></iframe>
-    ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}`;
+    ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}
+    ${biliMobile ? '<div class="shield bili-mobile-danmaku" aria-hidden="true"></div>' : ''}`;
   if (v.platform === 'youtube') return watchYouTube(box, onEnded);
 }
 
