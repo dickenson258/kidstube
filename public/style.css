@@ -94,6 +94,8 @@ img { display: block; }
 .side .card .title { font-size: 14px; }
 .side .card .body { padding: 8px 10px; }
 .player-bar { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.bili-site-mode summary { cursor: pointer; text-decoration: underline; }
+.bili-site-mode p { margin: 6px 0 0; }
 
 /* ---------- 家长后台 ---------- */
 .admin { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }

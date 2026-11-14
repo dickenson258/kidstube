@@ -534,10 +534,55 @@ function sandboxOn(platform) {
   const key = SANDBOX_SITES.includes(platform) ? platform : 'other';
   return s.sandboxSites[key] ?? (key === 'youtube' || key === 'youku' || key === 'bilibili');
 }
+function usesBiliMobilePlayer() {
+  const ua = navigator.userAgent;
+  return /AppleWebKit.*Mobile.*/.test(ua) && !/Domono/.test(ua);
+}
+function isStandalone() {
+  return navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+}
+function biliSiteModeGuide() {
+  if (usesBiliMobilePlayer()) return '';
+  const ua = navigator.userAgent;
+  const kind = deviceKind();
+  // 安卓请求桌面网站时可能只报告 Linux。
+  const android = !/Mobile/.test(ua) && (kind === 'android' || (/Linux/.test(ua) && navigator.maxTouchPoints > 1));
+  if (kind !== 'ios' && !android) return '';
+  if (isStandalone()) {
+    return `<p>${t('biliSiteModeApp')}</p><button type="button" class="btn small" data-copy-bili-page>${t('copyLink')}</button>`;
+  }
+  return `<p>${t(kind === 'ios' ? 'biliSiteModeSafari' : 'biliSiteModeAndroid')}</p>`;
+}
+function bindBiliSiteModeGuide(root, hash) {
+  $('[data-copy-bili-page]', root)?.addEventListener('click', async () => {
+    // 只分享首页或观看页地址，不携带同步邀请、恢复码或查询参数。
+    const link = new URL(location.pathname, location.origin);
+    link.hash = hash;
+    try {
+      await navigator.clipboard.writeText(link.href);
+      toast(t('linkCopied'));
+    } catch {
+      window.prompt(t('copyLink'), link.href);
+    }
+  });
+}
+async function maybeShowBiliSyncGuide() {
+  if (db.settings.biliSyncGuideSeen) return;
+  const guide = biliSiteModeGuide();
+  if (!guide) return;
+  if (await detectHelper() || helperVersion() || location.hash !== '#/' || db.settings.biliSyncGuideSeen) return;
+  db.settings.biliSyncGuideSeen = true;
+  save();
+  modal(`<h2>${t('biliSyncTitle')}</h2><p class="hint">${t('biliSyncHint')}</p>${guide}
+    <div class="row confirm-acts"><button type="button" class="btn primary" data-close>${t('close')}</button></div>`, (dlg, close) => {
+    bindBiliSiteModeGuide(dlg, '#/');
+    $('[data-close]', dlg).onclick = close;
+  });
+}
 function mountIframe(box, v, onEnded) {
   const s = db.settings;
   // B 站用这一条件把 iframe 转到手机版。手机版保留了弹幕开关，需单独拦截点击。
-  const biliMobile = v.platform === 'bilibili' && /AppleWebKit.*Mobile.*/.test(navigator.userAgent) && !/Domono/.test(navigator.userAgent);
+  const biliMobile = v.platform === 'bilibili' && usesBiliMobilePlayer();
   // 沙箱（不含 allow-popups / allow-top-navigation）：播放器里指向外网的链接、"在 YouTube 上观看"、推荐卡片等
   // 无法打开新页面或跳转片单所在页面；各平台可在家长设置中单独调整。
   const sandboxed = sandboxOn(v.platform);
@@ -546,6 +591,17 @@ function mountIframe(box, v, onEnded) {
       referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation allow-storage-access-by-user-activation"' : ''}></iframe>
     ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}
     ${biliMobile ? '<div class="shield bili-mobile-danmaku" aria-hidden="true"></div>' : ''}`;
+  if (v.platform === 'bilibili' && !biliMobile) {
+    const guide = biliSiteModeGuide();
+    const bar = box.parentElement && $('.player-bar', box.parentElement);
+    if (guide && bar && !bar.nextElementSibling?.matches('.bili-site-mode')) {
+      bar.insertAdjacentHTML('afterend', `<details class="hint bili-site-mode">
+        <summary>${t(isStandalone() ? 'biliSiteModeAppTitle' : 'biliSiteMode')}</summary>
+        ${guide}
+      </details>`);
+      bindBiliSiteModeGuide(bar.nextElementSibling, '#/watch/' + v.id);
+    }
+  }
   if (v.platform === 'youtube') return watchYouTube(box, onEnded);
 }
 
@@ -1996,11 +2052,13 @@ function renderRecover() {
     if (db.settings.pinHash && !(await unlockParent())) return;
     const btn = $('#rc-go');
     btn.disabled = true; btn.textContent = t('recoverBusy');
+    const already = S.syncOn();
     try {
-      if (S.syncOn()) await S.leaveSync();
+      if (already) await S.leaveSync();
       await S.recoverWithCode(v);
       toast(t('recoverDone'));
       location.hash = '#/';
+      if (!already) void maybeShowBiliSyncGuide();
     } catch (err) {
       btn.disabled = false; btn.textContent = t('recoverGo');
       toast(err.message === 'not_found' || err.message === 'bad_code' ? t('recoverNotFound') : err.message === 'too_many_attempts' ? t('recoverTooMany') : t('syncErr', err.message));
@@ -2124,7 +2182,7 @@ function renderJoin() {
 async function renderPair(code, inApp) {
   // 密钥和邀请不留在地址栏和历史记录里。但在 iPhone/iPad 上先保留到点"加入"为止：
   // 用控制中心的"扫码器"扫码会在它自己的小浏览器里打开，数据存不到 Safari，需要点"在 Safari 中打开"带着完整链接过去
-  const ios = deviceKind() === 'ios' && !inApp && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches;
+  const ios = deviceKind() === 'ios' && !inApp && !isStandalone();
   const scrub = () => history.replaceState(null, '', location.pathname + location.search + '#/pair');
   if (!ios || !code) scrub();
   const already = S.syncOn();
@@ -2147,6 +2205,7 @@ async function renderPair(code, inApp) {
       scrub();
       toast(t('pairDone'));
       location.hash = '#/';
+      if (!already) void maybeShowBiliSyncGuide();
     } catch (err) {
       btn.disabled = false;
       toast(err.message === 'invite_invalid' ? t('pairUsed') : err.message === 'bad_link' ? t('pairBadLink') : t('syncErr', err.message));
