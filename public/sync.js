@@ -66,7 +66,7 @@ export function deviceName() {
 // ---------------------------------------------------------------- 与 app.js 的接口
 let hooks = null; // { getDb, applyRemote(snapshot), onStatus(state), onRevoked(wipe) }
 let lastPrint = '', pushTimer = null, applying = false, busy = Promise.resolve();
-const snapshot = (db) => ({ groups: db.groups, videos: db.videos, settings: Object.fromEntries(SETTINGS.filter((k) => k in db.settings).map((k) => [k, db.settings[k]])) });
+const snapshot = (db) => ({ groups: db.groups, videos: db.videos, seriesCovers: db.seriesCovers, settings: Object.fromEntries(SETTINGS.filter((k) => k in db.settings).map((k) => [k, db.settings[k]])) });
 const print = (snap) => JSON.stringify(snap);
 const status = (state, extra = {}) => hooks?.onStatus?.({ state, at: cfg?.at || null, ...extra });
 const queue = (fn) => (busy = busy.then(fn, fn));

@@ -21,17 +21,40 @@ const browserLang = /^zh/i.test(navigator.language) ? 'zh' : 'en';
 function load() {
   const base = {
     videos: [],
+    seriesCovers: {},
     groups: DICT[browserLang].defaultGroups.slice(),
     settings: { lang: browserLang, pinHash: '', ytKey: '', ytLoggedIn: false, shield: true, sandbox: false, dailyLimit: 0, autoplayNext: true, biliNative: true, sandboxSites: { youtube: true, youku: true }, sandboxYoukuDefault: 1 },
     usage: { date: today(), sec: 0, bonus: 0 },
   };
   try {
     const d = JSON.parse(localStorage.getItem(KEY));
-    if (d) return { ...base, ...d, settings: { ...base.settings, ...d.settings } };
+    if (d) return { ...base, ...d, seriesCovers: d.seriesCovers || {}, settings: { ...base.settings, ...d.settings } };
   } catch {}
   return base;
 }
 const db = load();
+const seriesCover = (id) => Object.prototype.hasOwnProperty.call(db.seriesCovers, id) ? db.seriesCovers[id] || {} : {};
+function setSeriesCover(id, changes) {
+  const cover = { ...seriesCover(id), ...changes };
+  for (const key of ['custom', 'platform']) {
+    cover[key] = R.coverUrl(cover[key]);
+    if (!cover[key]) delete cover[key];
+  }
+  if (cover.custom || cover.platform) db.seriesCovers = { ...db.seriesCovers, [id]: cover };
+  else delete db.seriesCovers[id];
+}
+function importSeriesCovers(covers, videos) {
+  for (const id of new Set(videos.map((v) => v.series?.id).filter(Boolean))) {
+    const incoming = covers?.[id];
+    if (!incoming) continue;
+    const current = seriesCover(id);
+    setSeriesCover(id, { custom: current.custom || incoming.custom, platform: current.platform || incoming.platform });
+  }
+}
+function pruneSeriesCovers() {
+  const ids = new Set(db.videos.map((v) => v.series?.id));
+  for (const id of Object.keys(db.seriesCovers)) if (!ids.has(id)) delete db.seriesCovers[id];
+}
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { toast(t('storageFail')); }
   S.onSaved();
@@ -337,10 +360,19 @@ function videoCard(v, { ep, current } = {}) {
 }
 function seriesCard(series, eps) {
   const first = eps[0];
+  const { custom, platform } = seriesCover(series.id);
+  const [cover, ...fallbacks] = [...new Set([custom, platform, ...seriesEps(series.id).map((v) => v.thumb)].map(R.coverUrl).filter(Boolean))];
   return `<a class="card stack" href="#/series/${encodeURIComponent(series.id)}">
-    <div class="thumb">${thumbImg(first)}<span class="plat plat-series">${ICON.folder(12)} ${t('collection')}</span><span class="dur">${t('episodesN', eps.length)}</span></div>
+    <div class="thumb">${cover ? `<img src="${esc(cover)}" data-cover-fallbacks="${esc(JSON.stringify(fallbacks))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span class="plat plat-series">${ICON.folder(12)} ${t('collection')}</span><span class="dur">${t('episodesN', eps.length)}</span></div>
     <div class="body"><div class="title">${esc(series.title)}</div><div class="sub">${esc(first.author || '')}</div></div></a>`;
 }
+app.addEventListener('error', ({ target }) => {
+  if (target.tagName !== 'IMG' || !target.dataset.coverFallbacks) return;
+  const [cover, ...remaining] = JSON.parse(target.dataset.coverFallbacks);
+  if (!cover) return target.remove();
+  target.dataset.coverFallbacks = JSON.stringify(remaining);
+  target.src = cover;
+}, true);
 // 首页：同一合集的视频合并成一张"合集"卡片（搜索时不合并，直接列出匹配的视频）
 function homeCards(list, merge) {
   if (!merge) return list.map((v) => videoCard(v)).join('');
@@ -1041,7 +1073,7 @@ function bindGroupSelect(sel) {
   });
 }
 const exists = (v) => db.videos.some((x) => x.platform === v.platform && x.vid === v.vid && (x.page || 1) === (v.page || 1));
-// series：{ id, title, indexOf(v) } —— 作为合集加入时按集数排序；已在库里的视频会被补上合集信息
+// 作为合集加入时按集数排序；已在库里的视频会被补上合集信息
 function addVideos(list, group, series) {
   let n = 0;
   if (series?.rename) db.videos.forEach((x) => { if (x.series?.id === series.id) x.series.title = series.title; });
@@ -1053,7 +1085,9 @@ function addVideos(list, group, series) {
     db.videos.unshift({ ...v, src: v.playType === 'xhs' ? undefined : v.src, id: uid(), group, addedAt: Date.now(), ...(ser ? { series: ser } : {}) });
     n++;
   }
+  if (series?.cover && db.videos.some((v) => v.series?.id === series.id)) setSeriesCover(series.id, { platform: series.cover });
   save();
+  if (series) scheduleSeriesCoverBackfill();
   return n;
 }
 
@@ -1301,7 +1335,7 @@ function showCreator(out, url, data) {
     const picked = items.filter((v) => chosen.has(keyOf(v)));
     // 作为合集加入：已在库里的同合集视频也一起补上合集信息（便于连续播放）
     const n = addVideos(asSeries ? items.filter((v) => chosen.has(keyOf(v)) || exists(v)) : picked, lastGroup,
-      asSeries ? { id: col.id, title: $('#series-name')?.value.trim() || col.title, rename: true, indexOf: (v) => items.indexOf(v) } : undefined);
+      asSeries ? { id: col.id, title: $('#series-name')?.value.trim() || col.title, cover: col.cover, rename: true, indexOf: (v) => items.indexOf(v) } : undefined);
     chosen.clear();
     draw();
     toast(t('addedN', n, lastGroup));
@@ -1330,7 +1364,7 @@ function confirmBox({ title, body, ok, danger = true, extra = [] }) {
   });
 }
 function exportBackup() {
-  const blob = new Blob([JSON.stringify({ app: 'KidsTube', version: 1, groups: db.groups, videos: db.videos }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ app: 'KidsTube', version: 1, groups: db.groups, videos: db.videos, seriesCovers: db.seriesCovers }, null, 2)], { type: 'application/json' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `kidstube-backup-${today()}.json` });
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -1389,7 +1423,7 @@ async function decodeList(s) {
   const bytes = s[0] === '1' ? await pipeBytes(raw, new DecompressionStream('deflate-raw')) : raw;
   const d = JSON.parse(new TextDecoder().decode(bytes));
   if (!Array.isArray(d?.i)) throw new Error('bad list');
-  return { title: String(d.n || '').slice(0, 80), videos: d.i.filter((o) => o && o.p && o.v).map(unpackVideo).filter(shareable) };
+  return { title: String(d.n || '').slice(0, 80), videos: d.i.filter((o) => o && o.p && o.v).map(unpackVideo).filter(shareable), seriesCovers: d.c };
 }
 // 短链接：片单内容（公开信息，不含家庭信息）保存到服务器，得到 lists.domibuddy.com/l/xxxxxxxx
 const LISTS_API = 'https://api.domibuddy.com/v1/lists';
@@ -1434,7 +1468,11 @@ function shareDialog(videos, defaultTitle) {
       const my = ++seq;
       const n = name();
       builtFor = n;
-      const code = await encodeList({ n, i: ok.map((v) => packVideo(v)) });
+      const covers = [...new Set(ok.map((v) => v.series?.id).filter(Boolean))]
+        .map((id) => [id, seriesCover(id)])
+        .filter(([, cover]) => cover.custom || cover.platform);
+      const payload = { n, ...(covers.length ? { c: Object.fromEntries(covers) } : {}) };
+      const code = await encodeList({ ...payload, i: ok.map((v) => packVideo(v)) });
       // 优先用短链接（微信等聊天软件里能显示标题和封面的预览卡片）；连不上服务器时用长链接
       $('#sh-link', dlg).value = t('shareMaking');
       const short = await shortLink(code, n, ok);
@@ -1562,11 +1600,13 @@ async function renderImport(code, listId) {
     }
     const added = fresh.filter((v) => !exists(v)).map((v) => ({ ...v, id: uid(), group, addedAt: Date.now() }));
     db.videos.unshift(...added);
+    importSeriesCovers(list.seriesCovers, added);
     save();
     toast(t('importedN', added.length));
     if (listId) fetch(`${LISTS_API}/${encodeURIComponent(listId)}/imported`, { method: 'POST' }).catch(() => {});
     location.hash = '#/';
     backfillThumbs(added);
+    scheduleSeriesCoverBackfill();
   };
 }
 // 二维码里的精简片单没有封面：B 站封面通过 JSONP 接口补上（不需要助手）
@@ -1632,7 +1672,7 @@ function paneLibrary(el) {
       <td><div class="t" contenteditable="true" data-f="title" title="${t('editTitle')}">${esc(v.title)}</div>
         <div class="s">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · <button class="link-btn" data-series="${esc(v.series.id)}" title="${t('renameSeries')}">${ICON.folder(13)} ${esc(v.series.title)} ✎</button> ${t('epOfN', epNo(v), seriesEps(v.series.id).length)}` : ''} · <a href="${esc(v.url)}" target="_blank" rel="noopener">${t('original')}</a></div></td>
       <td><select data-f="group">${db.groups.map((g) => `<option ${g === v.group ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td>
-      <td class="acts">${canHaveCreator(v) ? `<button class="btn small" data-more>${t('moreFromCreator')}</button>` : ''}<button class="btn danger small" data-del>${t('del')}</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">${t('noVideos')}</td></tr>`;
+      <td class="acts">${v.series && R.coverUrl(v.thumb) ? `<button class="btn small" data-series-cover>${t(seriesCover(v.series.id).custom === R.coverUrl(v.thumb) ? 'seriesCoverAuto' : 'seriesCoverPick')}</button>` : ''}${canHaveCreator(v) ? `<button class="btn small" data-more>${t('moreFromCreator')}</button>` : ''}<button class="btn danger small" data-del>${t('del')}</button></td></tr>`).join('') || `<tr><td colspan="4" class="hint">${t('noVideos')}</td></tr>`;
     drawBulk();
   };
   // 视频库有变化（删除 / 改分组）后：总数、分组数量、博主列表、列表、批量按钮全部重新计算
@@ -1648,6 +1688,7 @@ function paneLibrary(el) {
     const set = new Set(ids);
     const before = db.videos.length;
     db.videos = db.videos.filter((x) => !set.has(x.id));
+    pruneSeriesCovers();
     save();
     refresh();
     return before - db.videos.length;
@@ -1707,6 +1748,15 @@ function paneLibrary(el) {
   });
   $('#libbody').addEventListener('click', (e) => {
     if (e.target.matches('[data-more]')) return openCreatorOf(byRow(e), e.target);
+    if (e.target.matches('[data-series-cover]')) {
+      const v = byRow(e);
+      const thumb = R.coverUrl(v.thumb);
+      const reset = seriesCover(v.series.id).custom === thumb;
+      setSeriesCover(v.series.id, { custom: reset ? '' : thumb });
+      save();
+      draw();
+      return toast(t(reset ? 'seriesCoverReset' : 'seriesCoverSaved'));
+    }
     // 改合集名：同一合集的所有集一起改，首页合集卡片和播放页都用新名字
     const sb = e.target.closest('[data-series]');
     if (sb) {
@@ -2267,8 +2317,13 @@ S.initSync({
   applyRemote(snap) {
     if (Array.isArray(snap.groups)) db.groups = snap.groups;
     if (Array.isArray(snap.videos)) db.videos = snap.videos;
+    if (snap.seriesCovers && typeof snap.seriesCovers === 'object') {
+      db.seriesCovers = {};
+      importSeriesCovers(snap.seriesCovers, db.videos);
+    } else pruneSeriesCovers();
     Object.assign(db.settings, snap.settings || {});
     save();
+    scheduleSeriesCoverBackfill();
     // 孩子正在看视频时不打断；其他页面刷新一下显示新片单
     const page = location.hash.split('/')[1] || '';
     if (!['watch', 'parent', 'import', 'join', 'pair'].includes(page)) route();
@@ -2283,6 +2338,7 @@ S.initSync({
     syncState = { state: 'off' };
     if (wipe) {
       db.videos = [];
+      db.seriesCovers = {};
       db.progress = {};
       save();
       toast(t('devRevokedWiped'));
@@ -2330,6 +2386,7 @@ function paneSettings(el) {
     s.sandboxSites = Object.fromEntries([...el.querySelectorAll('[data-sandbox]')].map((c) => [c.dataset.sandbox, c.checked]));
     delete s.sandbox;
     save();
+    scheduleSeriesCoverBackfill();
     toast(t('saved'));
   };
   $('#reset').onclick = () => { db.usage = { date: today(), sec: 0, bonus: 0 }; save(); paneSettings(el); };
@@ -2343,12 +2400,68 @@ function paneSettings(el) {
       const d = JSON.parse(await e.target.files[0].text());
       if (!Array.isArray(d.videos)) throw new Error();
       d.groups?.forEach((g) => !db.groups.includes(g) && db.groups.push(g));
-      let n = 0;
-      d.videos.forEach((v) => { if (v.vid && v.platform && !exists(v)) { db.videos.push({ ...v, id: v.id || uid() }); n++; } });
+      const added = [];
+      d.videos.forEach((v) => { if (v.vid && v.platform && !exists(v)) { db.videos.push({ ...v, id: v.id || uid() }); added.push(v); } });
+      importSeriesCovers(d.seriesCovers, added);
       save();
-      toast(t('importedN', n));
+      scheduleSeriesCoverBackfill();
+      toast(t('importedN', added.length));
     } catch { toast(t('badFile')); }
   };
+}
+
+// 旧合集逐个补查。失败结果只在本设备短期记住，以便平台恢复或装好助手后再补。
+let coverBackfillScheduled = false, coverBackfillRunning = false, coverBackfillPending = false;
+function scheduleSeriesCoverBackfill() {
+  if (coverBackfillRunning) {
+    coverBackfillPending = true;
+    return;
+  }
+  if (coverBackfillScheduled) return;
+  coverBackfillScheduled = true;
+  setTimeout(async () => {
+    coverBackfillScheduled = false;
+    if (S.syncOn() && !S.isParentDevice()) return;
+    coverBackfillRunning = true;
+    try { await backfillSeriesCovers(); } finally {
+      coverBackfillRunning = false;
+      if (coverBackfillPending) {
+        coverBackfillPending = false;
+        scheduleSeriesCoverBackfill();
+      }
+    }
+  }, 1200);
+}
+async function backfillSeriesCovers() {
+  const mode = [R.hasHelper(), Boolean(db.settings.ytKey)].join(':');
+  const key = 'kidstube:series-cover-retries';
+  let retries = {};
+  try { retries = JSON.parse(localStorage.getItem(key)) || {}; } catch {}
+  const now = Date.now();
+  retries = Object.fromEntries(Object.entries(retries).filter(([, at]) => at > now));
+  const candidates = new Map();
+  for (const v of kidVideos()) {
+    const id = v.series?.id;
+    if (!id || seriesCover(id).platform || retries[mode + ':' + id]) continue;
+    if (!/^(yt-[\w-]+|bili-(?:season|series)-\d+|bili-pages-BV\w+)$/.test(id)) continue;
+    if (id.startsWith('bili-series-') && !R.hasHelper()) continue;
+    if (!candidates.has(id) || v.series.index < candidates.get(id).series.index) candidates.set(id, v);
+  }
+  for (const [id, episode] of candidates) {
+    if (S.syncOn() && !S.isParentDevice()) break;
+    if (seriesCover(id).platform || !db.videos.some((v) => v.id === episode.id && v.series?.id === id)) continue;
+    const retry = mode + ':' + id;
+    retries[retry] = Date.now() + 86400000;
+    try { localStorage.setItem(key, JSON.stringify(retries)); } catch {}
+    let cover = '';
+    try { cover = await R.collectionCover(id, episode, db.settings.ytKey); } catch {}
+    if (cover && db.videos.some((v) => v.id === episode.id && v.series?.id === id) && !seriesCover(id).platform && (!S.syncOn() || S.isParentDevice())) {
+      setSeriesCover(id, { platform: cover });
+      save();
+      if ((!location.hash || location.hash === '#/') && !homeQuery && !$('#modal-root').firstChild) renderHome();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 }
 
 // 旧数据补全：YouTube 新版播放列表导入的视频之前没读到频道名，首页按频道分类时看不到。
@@ -2381,5 +2494,7 @@ async function refreshBdpanThumbs() {
 }
 
 route();
+scheduleSeriesCoverBackfill();
+onHelper(scheduleSeriesCoverBackfill);
 fillYouTubeChannels();
 refreshBdpanThumbs();

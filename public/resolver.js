@@ -74,6 +74,7 @@ const fmtDur = (sec) => {
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
 };
 const https = (u) => (u ? u.replace(/^(https?:)?\/\//, 'https://') : u);
+export const coverUrl = (u) => typeof u === 'string' && /^(https?:)?\/\/[^/\s]/i.test(u) ? https(u) : '';
 const encCursor = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 const decCursor = (s) => (s ? JSON.parse(decodeURIComponent(escape(atob(s)))) : null);
 
@@ -262,7 +263,12 @@ async function ytBrowse(payload) {
   const owner = ytFind(data, 'videoOwnerRenderer')?.title?.runs?.[0]?.text || data.metadata?.channelMetadataRenderer?.title || '';
   const title = data.metadata?.playlistMetadataRenderer?.title || data.header?.playlistHeaderRenderer?.title?.simpleText ||
     data.header?.pageHeaderRenderer?.pageTitle || '';
-  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: blocked ? null : conts[conts.length - 1] || null, title, owner, blocked };
+  const header = data.header?.playlistHeaderRenderer;
+  const sidebar = ytFind(data.sidebar, 'playlistSidebarPrimaryInfoRenderer');
+  const thumbnails = header?.playlistHeaderBanner?.heroPlaylistThumbnailRenderer?.thumbnail?.thumbnails ||
+    sidebar?.thumbnailRenderer?.playlistVideoThumbnailRenderer?.thumbnail?.thumbnails;
+  const cover = coverUrl(thumbnails?.[thumbnails.length - 1]?.url);
+  return { videos: out.filter((v) => !seen.has(v.vid) && seen.add(v.vid)), next: blocked ? null : conts[conts.length - 1] || null, title, owner, blocked, cover };
 }
 // 频道 ID：先用很小的 resolve_url 接口（约 1KB）；频道主页有 1～2MB，手机网络经助手下载容易超时
 async function ytChannelInfo(u) {
@@ -324,12 +330,26 @@ async function ytCreatorApi(u, c, ytKey) {
     const videos = (d.items || []).map((it) => it.snippet)
       .filter((s) => s.resourceId?.videoId && s.title !== 'Private video' && s.title !== 'Deleted video')
       .map((s) => ytVideo(s.resourceId.videoId, s.title, s.videoOwnerChannelTitle || author || s.channelTitle));
+    let cover;
     if (listId && !c?.pageToken) {
-      try { author = (await ytApi(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${listId}&key=${ytKey}`)).items?.[0]?.snippet?.title || author; } catch {}
+      try {
+        const snippet = await ytPlaylistSnippet(listId, ytKey);
+        author = snippet?.title || author;
+        cover = ytPlaylistCover(snippet);
+      } catch {}
     }
-    return { author: author || 'YouTube', total: d.pageInfo?.totalResults, videos, next: d.nextPageToken ? encCursor({ playlistId, author, pageToken: d.nextPageToken }) : null };
+    return { author: author || 'YouTube', cover, total: d.pageInfo?.totalResults, videos, next: d.nextPageToken ? encCursor({ playlistId, author, pageToken: d.nextPageToken }) : null };
   }
 }
+async function ytPlaylistSnippet(id, key) {
+  const data = await ytApi(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${encodeURIComponent(id)}&key=${encodeURIComponent(key)}`);
+  return data.items?.[0]?.snippet;
+}
+const ytPlaylistCover = (snippet) => {
+  const images = snippet?.thumbnails;
+  return coverUrl(images?.high?.url || images?.medium?.url || images?.standard?.url || images?.default?.url);
+};
+const ytPlaylistOEmbed = (id) => getJson(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/playlist?list=' + id)}`);
 
 // 既没有 Key 也没有助手：用 YouTube 官方嵌入播放器（IFrame Player API）的 getPlaylist() 读出播放列表里的视频 ID，
 // 再逐个用 oEmbed 取标题（两者都允许网页直接使用）。限制：最多 200 个视频；没有时长；
@@ -393,10 +413,12 @@ async function ytCreatorEmbed(u, c) {
     if (!listId) throw fail('NEED_HELPER_OR_KEY');
   }
   const ids = await ytEmbedPlaylist(listId);
+  let cover;
   if (!author) {
     try {
-      const o = await getJson(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/playlist?list=' + listId)}`);
+      const o = await ytPlaylistOEmbed(listId);
       author = (listId.startsWith('UU') ? o.author_name : o.title) || o.author_name || '';
+      cover = coverUrl(o.thumbnail_url);
     } catch {}
   }
   const from = c?.offset || 0, page = ids.slice(from, from + PAGE);
@@ -408,7 +430,7 @@ async function ytCreatorEmbed(u, c) {
   }
   const nextOffset = from + PAGE;
   return {
-    author: author || 'YouTube', total: ids.length, videos,
+    author: author || 'YouTube', cover, total: ids.length, videos,
     next: nextOffset < ids.length ? encCursor({ embed: listId, author, offset: nextOffset }) : null,
     ...(ids.length >= 200 ? { noteCode: 'YT_EMBED_CAP' } : {}),
   };
@@ -436,7 +458,7 @@ async function ytCreatorWeb(u, c) {
   if (!listId && !author) author = r.owner || r.videos.find((v) => v.author)?.author || decodeURIComponent(u.pathname.split('/')[1] || '');
   if (listId) author = r.title || 'Playlist'; // 播放列表：author 字段放列表名，视频各自保留所属频道
   r.videos.forEach((v) => (v.author = listId ? v.author || '' : author));
-  return { author, videos: r.videos, next: r.next ? encCursor({ token: r.next, author, list: !!listId }) : null, ...(r.blocked ? { noteCode: 'YT_FIRST_PAGE' } : {}) };
+  return { author, cover: r.cover, videos: r.videos, next: r.next ? encCursor({ token: r.next, author, list: !!listId }) : null, ...(r.blocked ? { noteCode: 'YT_FIRST_PAGE' } : {}) };
 }
 
 // ---------------------------------------------------------------- 哔哩哔哩
@@ -481,8 +503,7 @@ async function biliSingle(u) {
     return { platform: 'bilibili', playType: 'external', vid: u.pathname, url: u.href, title: meta(text, 'og:title') || pick(/<title>([^<]*)/, text) || '', thumb: https(meta(text, 'og:image')), author: '', duration: '' };
   }
   const q = off.vid.startsWith('av') ? 'aid=' + off.vid.slice(2) : 'bvid=' + off.vid;
-  const viewUrl = `https://api.bilibili.com/x/web-interface/view?${q}`;
-  const d = transport ? await getJson(viewUrl, { headers: BILI_REF }) : await jsonp(viewUrl);
+  const d = await biliView(q);
   if (d.code !== 0) throw fail('BILI_API', d.message);
   const v = biliVideo(d.data);
   // 分P 视频：详情里的 duration 是所有分P的总时长，单独加入某一P时改用这一P自己的时长和标题
@@ -494,19 +515,23 @@ async function biliSingle(u) {
   v._collection = biliCollectionOf(d.data, v);
   return v;
 }
+function biliView(query) {
+  const url = `https://api.bilibili.com/x/web-interface/view?${query}`;
+  return transport ? getJson(url, { headers: BILI_REF }) : jsonp(url);
+}
 // 视频详情里自带合集（ugc_season）和分P（pages）的完整列表
 function biliCollectionOf(dd, v) {
   const base = { author: v.author, authorUrl: v.authorUrl };
   const eps = (dd.ugc_season?.sections || []).flatMap((sec) => sec.episodes || []);
   if (eps.length > 1) {
     return {
-      ...base, id: 'bili-season-' + dd.ugc_season.id, title: dd.ugc_season.title,
+      ...base, id: 'bili-season-' + dd.ugc_season.id, title: dd.ugc_season.title, cover: coverUrl(dd.ugc_season.cover),
       videos: eps.map((ep) => biliVideo({ bvid: ep.bvid, title: ep.title || ep.arc?.title, pic: ep.arc?.pic, duration: ep.arc?.duration, owner: dd.owner })),
     };
   }
   if ((dd.pages || []).length > 1) {
     return {
-      ...base, id: 'bili-pages-' + dd.bvid, title: dd.title,
+      ...base, id: 'bili-pages-' + dd.bvid, title: dd.title, cover: coverUrl(dd.pic),
       videos: dd.pages.map((p) => ({
         ...biliVideo({ bvid: dd.bvid, title: p.part, pic: p.first_frame || dd.pic, duration: p.duration, owner: dd.owner }),
         page: p.page, url: `https://www.bilibili.com/video/${dd.bvid}?p=${p.page}`,
@@ -532,20 +557,24 @@ async function biliCollection({ mid, sid, type }, { cursor }) {
   const c = decCursor(cursor) || {};
   const pn = c.pn || 1, ps = 30;
   const headers = { referer: `https://space.bilibili.com/${mid}/lists/${sid}?type=${type}` };
-  let archives = [], total = 0, title = c.title || '';
+  let archives = [], total = 0, title = c.title || '', cover = c.cover || '';
   if (type === 'season') {
-    const d = await getJson(`https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?mid=${mid}&season_id=${sid}&page_num=${pn}&page_size=${ps}&sort_reverse=false`, { headers });
-    if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
-    archives = d.data.archives || [];
-    total = d.data.page?.total ?? d.data.meta?.total ?? 0;
-    title = title || d.data.meta?.name || '';
+    const data = await biliSeasonPage(mid, sid, pn, ps, headers);
+    archives = data.archives || [];
+    total = data.page?.total ?? data.meta?.total ?? 0;
+    title ||= data.meta?.name || '';
+    cover ||= coverUrl(data.meta?.cover);
   } else {
     const d = await getJson(`https://api.bilibili.com/x/series/archives?mid=${mid}&series_id=${sid}&pn=${pn}&ps=${ps}&sort=asc&only_normal=true`, { headers });
     if (d.code !== 0) throw fail('BILI_API', `${d.code} ${d.message || ''}`.trim());
     archives = d.data.archives || [];
     total = d.data.page?.total ?? 0;
     if (!title) {
-      try { title = (await getJson(`https://api.bilibili.com/x/series/series?series_id=${sid}`, { headers })).data?.meta?.name || ''; } catch {}
+      try {
+        const meta = await biliSeriesMeta(sid, headers);
+        title = meta?.name || '';
+        cover = coverUrl(meta?.cover);
+      } catch {}
     }
   }
   let author = c.author || '';
@@ -556,9 +585,50 @@ async function biliCollection({ mid, sid, type }, { cursor }) {
   return {
     author: title || author, total, source: 'collection',
     videos: archives.map((a) => ({ ...biliVideo(a), author, authorUrl })),
-    next: pn * ps < total ? encCursor({ pn: pn + 1, title, author }) : null,
-    collection: { id: `bili-${type}-${sid}`, title: title || author },
+    next: pn * ps < total ? encCursor({ pn: pn + 1, title, author, cover }) : null,
+    collection: { id: `bili-${type}-${sid}`, title: title || author, cover },
   };
+}
+async function biliSeasonPage(mid, sid, pn, ps, headers = BILI_REF) {
+  const data = await getJson(`https://api.bilibili.com/x/polymer/web-space/seasons_archives_list?mid=${mid}&season_id=${sid}&page_num=${pn}&page_size=${ps}&sort_reverse=false`, { headers });
+  if (data.code !== 0) throw fail('BILI_API', `${data.code} ${data.message || ''}`.trim());
+  return data.data;
+}
+async function biliSeriesMeta(id, headers = BILI_REF) {
+  const data = await getJson(`https://api.bilibili.com/x/series/series?series_id=${id}`, { headers });
+  if (data.code !== 0) throw fail('BILI_API', data.message);
+  return data.data?.meta;
+}
+export async function collectionCover(id, episode, ytKey) {
+  const yt = /^yt-([\w-]+)$/.exec(id);
+  if (yt && episode.platform === 'youtube') {
+    const listId = yt[1];
+    if (ytKey) {
+      try {
+        const cover = ytPlaylistCover(await ytPlaylistSnippet(listId, ytKey));
+        if (cover) return cover;
+      } catch {}
+    }
+    if (transport) return (await ytBrowse({ browseId: 'VL' + listId })).cover;
+    return coverUrl((await ytPlaylistOEmbed(listId)).thumbnail_url);
+  }
+  if (episode.platform !== 'bilibili') return '';
+  const series = /^bili-series-(\d+)$/.exec(id);
+  if (series) return coverUrl((await biliSeriesMeta(series[1]))?.cover);
+  const season = /^bili-season-(\d+)$/.exec(id);
+  if (!season && !/^bili-pages-BV[\w]+$/.test(id)) return '';
+  const vid = episode.vid;
+  if (!/^(BV[\w]+|av\d+)$/.test(vid)) return '';
+  const data = await biliView(vid.startsWith('av') ? 'aid=' + vid.slice(2) : 'bvid=' + vid);
+  if (data.code !== 0) throw fail('BILI_API', data.message);
+  const video = data.data;
+  if (season) {
+    const cover = String(video?.ugc_season?.id) === season[1] ? coverUrl(video.ugc_season.cover) : '';
+    const mid = /^https:\/\/space\.bilibili\.com\/(\d+)\/?$/.exec(episode.authorUrl || '')?.[1];
+    if (!cover && transport && mid) return coverUrl((await biliSeasonPage(mid, season[1], 1, 1)).meta?.cover);
+    return cover;
+  }
+  return id === 'bili-pages-' + video?.bvid ? coverUrl(video.pic) : '';
 }
 // B 站 UP 主投稿列表。B 站风控较严，依次尝试多种方式，并把每一步的结果写进错误信息，方便排查：
 //   1) WBI 签名投稿接口（带 w_webid —— 2024 年起登录状态下需要）
@@ -858,7 +928,7 @@ export async function resolve({ url, cursor, ytKey }) {
     }
     if (listId || /^\/(@|channel\/|c\/|user\/)/.test(u.pathname)) {
       const r = await ytCreator(u, { cursor, ytKey });
-      if (listId) r.collection = { id: 'yt-' + listId, title: r.author };
+      if (listId) r.collection = { id: 'yt-' + listId, title: r.author, cover: r.cover };
       // 频道主页（非播放列表）：记下博主主页，便于按博主归类、查看更多视频
       const home = u.searchParams.get('list') ? null : 'https://www.youtube.com' + u.pathname.split('/').slice(0, u.pathname.startsWith('/@') ? 2 : 3).join('/');
       if (home) r.videos.forEach((v) => (v.authorUrl = v.authorUrl || home));
