@@ -373,6 +373,7 @@ function continueRow(show) {
     <h2 class="row-title">${t('allVideos')}</h2>`;
 }
 function renderHome() {
+  const legacySite = location.hostname === 'dickenson258.github.io' && /^\/kidstube(?:\/|$)/.test(location.pathname);
   const groups = db.groups.filter((g) => kidVideos().some((v) => v.group === g));
   if (homeGroup !== ALL && !groups.includes(homeGroup)) homeGroup = ALL;
   const q = homeQuery.toLowerCase();
@@ -387,6 +388,14 @@ function renderHome() {
   app.innerHTML =
     topbar(`<input class="search" id="q" placeholder="${t('search')}" value="${esc(homeQuery)}">`) +
     `<main class="wrap">
+      ${legacySite ? `<aside class="panel" aria-labelledby="legacy-title">
+        <h2 id="legacy-title">${t('legacyTitle')}</h2>
+        ${db.videos.length ? `<p class="hint">${t('legacyBackupHint')}</p>` : ''}
+        <div class="row">
+          ${db.videos.length ? `<button type="button" class="btn" id="legacy-export">${t('legacyExport')}</button>` : ''}
+          <a class="btn primary" href="https://lists.domibuddy.com/">${t('legacyVisit')}</a>
+        </div>
+      </aside>` : ''}
       ${kidVideos().length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
       ${creators.length > 1 ? `<div class="chips sub">${[{ key: ALL, name: t('allCreators') }, ...creators].map((c) => `<button class="chip folder ${c.key === homeCreator ? 'on' : ''}" data-c="${esc(c.key)}">${ICON.folder(16)}<span>${esc(c.name)}</span>${c.count ? `<em>${c.count}</em>` : ''}</button>`).join('')}</div>` : ''}
       ${sortMode ? `<div class="chips sort">${SORTS.map((m) => `<button class="chip small ${m === sortMode ? 'on' : ''}" data-sort="${m}">${t('sort_' + m)}</button>`).join('')}</div>` : ''}
@@ -396,6 +405,10 @@ function renderHome() {
         : welcomeGuide()}
     </main>`;
   bindTopbar();
+  $('#legacy-export')?.addEventListener('click', async () => {
+    if (db.settings.pinHash && !(await pinDialog({ title: t('pinVerifyTitle'), sub: t('pinVerifySub') }))) return;
+    exportBackup();
+  });
   $('#guide-parent')?.addEventListener('click', () => $('#parent-btn')?.click());
   // 已安装，重新检测：先问一下助手；没回应就刷新页面（刚装好的脚本要刷新后才会注入）
   $('#guide-recheck')?.addEventListener('click', async (e) => {
