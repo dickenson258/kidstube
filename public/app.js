@@ -512,7 +512,8 @@ function embedUrl(v) {
     return `${host}/embed/${v.vid}?autoplay=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&fs=0&enablejsapi=1&hl=${hl}&origin=${encodeURIComponent(location.origin)}${v.resumeAt ? `&start=${v.resumeAt}` : ''}`;
   }
   if (v.platform === 'bilibili' && v.playType === 'iframe')
-    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&page=${v.page || 1}&autoplay=1&danmaku=0&high_quality=1${v.resumeAt ? `&t=${v.resumeAt}` : ''}`;
+    // 让孩子在 B 站播放器内点击播放，避免浏览器把自动播放降级为静音。
+    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&p=${v.page || 1}&autoplay=0&muted=0&danmaku=0&high_quality=1${v.resumeAt ? `&t=${v.resumeAt}` : ''}`;
   return v.embed;
 }
 
@@ -523,7 +524,7 @@ const SHIELDS = {
   default: ['top'],
 };
 
-// 每个网站单独设置是否用沙箱；默认只有 YouTube 开启（旧版的"全部开启"选项迁移为每个网站都开）
+// 每个网站单独设置是否用沙箱（旧版的"全部开启"选项迁移为每个网站都开）。
 const SANDBOX_SITES = ['youtube', 'bilibili', 'qq', 'youku', 'vimeo', 'dailymotion', 'other'];
 function sandboxOn(platform) {
   const s = db.settings;
@@ -531,12 +532,12 @@ function sandboxOn(platform) {
   // 优酷底部控制栏里的标志 / "去优酷"等按钮会跳出去，所以优酷也默认开启（老用户迁移一次）
   if (!s.sandboxYoukuDefault) { s.sandboxSites.youku = true; s.sandboxYoukuDefault = 1; save(); }
   const key = SANDBOX_SITES.includes(platform) ? platform : 'other';
-  return s.sandboxSites[key] ?? (key === 'youtube' || key === 'youku');
+  return s.sandboxSites[key] ?? (key === 'youtube' || key === 'youku' || key === 'bilibili');
 }
 function mountIframe(box, v, onEnded) {
   const s = db.settings;
   // 沙箱（不含 allow-popups / allow-top-navigation）：播放器里指向外网的链接、"在 YouTube 上观看"、推荐卡片等
-  // 都无法打开新页面或跳转，点击没有反应。YouTube 在沙箱里能正常播放，所以始终开启；其他网站按设置
+  // 无法打开新页面或跳转片单所在页面；各平台可在家长设置中单独调整。
   const sandboxed = sandboxOn(v.platform);
   // 有沙箱时外链本来就打不开，不再加透明遮挡（否则会挡住 YouTube 卡片列表的关闭按钮等正常操作）
   box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; fullscreen; encrypted-media; picture-in-picture; storage-access"

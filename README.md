@@ -24,7 +24,7 @@ DomiBuddy Lists puts one list in front of the child: only the videos the parent 
 
 - **Whitelist only.** Kids mode shows only videos in the library. The parent area is behind a 4-digit PIN.
 - **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Vimeo, direct mp4 / m3u8 links, and videos in your own Baidu Netdisk (with the helper). Import whole collections, playlists, channels or Netdisk folders.
-- **No recommendations or outbound links.** Player logos, titles and end-screen recommendations are covered; an optional per-site sandbox blocks links out of the player. Bilibili videos can play in DomiBuddy Lists's own player, with no Bilibili recommendations.
+- **Keep playback in the list.** Covers hide player logos, titles and YouTube end-screen recommendations. The player sandbox blocks popups and redirects on supported sites. Bilibili videos played in DomiBuddy Lists' own player have no Bilibili recommendations.
 - **Privacy: data never leaves the device.** No server, no account, no analytics. The list and settings live only in the browser (localStorage); move them to another device with a JSON export.
 - **Daily watch-time limit**, automatic next episode, and memberships you already pay for (sign in to each site in the same browser).
 - **Works on phones and tablets.** Add it to the home screen. Chinese / English.
@@ -134,7 +134,7 @@ server.js                       Optional local preview server (static files only
 
 - **只看白名单。** 孩子模式只显示片单里的视频，家长后台有 4 位密码锁。
 - **一个片单，多个网站。** 支持 YouTube、B站、腾讯视频、优酷、爱奇艺、Vimeo、mp4 / m3u8 直链，以及你自己百度网盘里的视频（需要助手）。合集、播放列表、频道、网盘文件夹可以整个导入。
-- **没有推荐，点不出去。** 播放器里的标志、标题和结束推荐都会被遮住；每个网站可以单独开启沙盒，屏蔽播放器里的外链。B站视频可以用朵米片单自己的播放器播放，没有 B站推荐。
+- **把播放留在片单里。** 遮罩可以挡住播放器里的标志、标题和 YouTube 片尾推荐，沙盒可按网站开启，阻止播放器打开新页面或跳转片单所在页面。用朵米片单自己的播放器看 B 站视频时，没有 B 站推荐。
 - **隐私：数据不离开设备。** 没有服务器、没有账号、没有统计。片单和设置只存在浏览器里（localStorage），换设备用 JSON 导出 / 导入。
 - **每日观看时长限制**、自动播放下一集，已有的会员照常可用（在同一个浏览器里登录各网站即可）。
 - **手机、平板可用。** 可以添加到主屏幕。支持中文 / 英文。
@@ -178,7 +178,7 @@ server.js                       Optional local preview server (static files only
 | 短链接（b23.tv 等） | ❌ 打开链接后粘贴完整地址 | ✅ 自动展开 |
 | B站付费番剧、爱奇艺、芒果 TV | 在原网站的窗口中打开 | 同左 |
 
-播放本身不需要助手，YouTube 和 B站的嵌入播放器由浏览器直接加载。
+播放本身不需要助手，YouTube 和 B 站的嵌入播放器由浏览器直接加载。B 站嵌入播放器需要点一下播放来开启声音，默认开启沙盒来拦截跳转。B 站仍可能显示推广按钮和片尾推荐。
 
 装了助手后，B站视频默认用朵米片单自己的播放器播放：助手获取 B站的 html5 mp4 地址，浏览器直接播放。这样在安卓 Firefox 上也能看（B站嵌入播放器在那里加载不出视频），也没有 B站推荐，并且会自动播放下一集。会员或付费视频会退回到嵌入播放器。这个选项在设置里。
 
