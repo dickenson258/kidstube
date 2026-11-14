@@ -2,7 +2,7 @@
 // @name         朵米助手 / DomiBuddy Helper
 // @namespace    https://kidstube.local/helper
 // @version      1.7.2
-// @description  让朵米片单网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets DomiBuddy Lists look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
+// @description  让朵米片单网页能读取 B 站、小红书、YouTube 等网站的视频信息（使用你自己浏览器的登录状态）。Lets Domi Lists look up videos on Bilibili, Xiaohongshu, YouTube and more, using your own browser sign-ins.
 // @match        *://*/*
 // @homepageURL  https://github.com/dickenson258/kidstube
 // @updateURL    https://lists.domibuddy.com/kidstube-helper.user.js

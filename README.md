@@ -1,6 +1,6 @@
-# DomiBuddy Lists · 朵米片单
+# Domi Lists · 朵米片单
 
-*Kids' video lists, picked by parents. A [DomiBuddy](https://domibuddy.com) (朵米伙伴) product, formerly KidsTube.*
+*Kids' video lists, picked by parents. Formerly KidsTube.*
 
 **Try it:** <https://lists.domibuddy.com> · free, open source (MIT), no sign-up
 
@@ -8,7 +8,7 @@ A kids' video site where parents choose exactly which videos their children can 
 
 English | [中文说明](#中文说明)
 
-![DomiBuddy Lists on a phone: the kids' home screen, the end-of-video screen with no Up Next, and a Bilibili series in the same list](docs/screens.jpg)
+![Domi Lists on a phone: the kids' home screen, the end-of-video screen with no Up Next, and a Bilibili series in the same list](docs/screens.jpg)
 
 ## Why
 
@@ -18,13 +18,13 @@ Video apps for kids have three problems for parents:
 - **Ads and unrelated videos.** Pause, and the screen fills with thumbnails that pull the child somewhere else.
 - **Content is scattered.** The good shows are split across YouTube, Bilibili, Tencent Video, Youku and iQIYI, each with its own app.
 
-DomiBuddy Lists puts one list in front of the child: only the videos the parent added, from any of those sites, in one place.
+Domi Lists puts one list in front of the child: only the videos the parent added, from any of those sites, in one place.
 
 ## Highlights
 
 - **Whitelist only.** Kids mode shows only videos in the library. The parent area is behind a 4-digit PIN.
 - **One library, many sites.** YouTube, Bilibili, Tencent Video, Youku, iQIYI, Vimeo, direct mp4 / m3u8 links, and videos in your own Baidu Netdisk (with the helper). Import whole collections, playlists, channels or Netdisk folders.
-- **Keep playback in the list.** Covers hide player logos, titles and YouTube end-screen recommendations. The player sandbox blocks popups and redirects on supported sites. Bilibili videos played in DomiBuddy Lists' own player have no Bilibili recommendations.
+- **Keep playback in the list.** Covers hide player logos, titles and YouTube end-screen recommendations. The player sandbox blocks popups and redirects on supported sites. Bilibili videos played in Domi Lists' own player have no Bilibili recommendations.
 - **Privacy: data never leaves the device.** No server, no account, no analytics. The list and settings live only in the browser (localStorage); move them to another device with a JSON export.
 - **Daily watch-time limit**, automatic next episode, and memberships you already pay for (sign in to each site in the same browser).
 - **Works on phones and tablets.** Add it to the home screen. Chinese / English.
@@ -37,7 +37,7 @@ DomiBuddy Lists puts one list in front of the child: only the videos the parent 
 
 ## Running and deploying
 
-DomiBuddy Lists is just the static files in the `public/` folder:
+Domi Lists is just the static files in the `public/` folder:
 
 - **Local preview:** `npm start` (Node 18+, no dependencies), then open <http://localhost:5173>. Devices on the same Wi-Fi can use the LAN address it prints.
 - **Deployment:** run `node scripts/build.mjs` (bundles and minifies the scripts and adds version stamps for long-term caching; needs network access for `npx esbuild`), then upload `dist/` to any static host, such as GitHub Pages, Cloudflare Pages, Vercel, or Nginx. Uploading `public/` as is also works, just loads slower. Subdirectory deployment is supported. HTTPS is recommended.
@@ -52,7 +52,7 @@ Browser cross-origin restrictions (CORS) stop a web page from reading data from 
 | Android | Firefox or Edge (Chrome for Android doesn't support extensions) | Tampermonkey |
 | iPhone / iPad | Safari | Userscripts app (free, open source) |
 
-Installation steps are in DomiBuddy Lists under 🔒 → Accounts.
+Installation steps are in Domi Lists under 🔒 → Accounts.
 
 Security design:
 - The helper only runs on pages that contain `<meta name="kidstube-app">`.
@@ -76,7 +76,7 @@ Security design:
 
 Playback never needs the helper. Embedded YouTube and Bilibili players are loaded by the browser directly.
 
-With the helper installed, Bilibili videos play in DomiBuddy Lists's own player by default. The helper fetches Bilibili's html5 mp4 address and the browser streams it directly. This works in Firefox for Android, where Bilibili's embedded player can't load video. It also shows no Bilibili recommendations and plays the next episode automatically. Members-only or paid videos fall back to the embedded player. The setting is under Settings.
+With the helper installed, Bilibili videos play in Domi Lists's own player by default. The helper fetches Bilibili's html5 mp4 address and the browser streams it directly. This works in Firefox for Android, where Bilibili's embedded player can't load video. It also shows no Bilibili recommendations and plays the next episode automatically. Members-only or paid videos fall back to the embedded player. The setting is under Settings.
 
 ## Other features
 
@@ -112,7 +112,7 @@ server.js                       Optional local preview server (static files only
 
 ## 中文说明
 
-朵米片单（DomiBuddy Lists）是朵米伙伴旗下的产品：家长精选的儿童视频片单。原名 KidsTube。
+朵米片单（Domi Lists）是由家长挑选内容的儿童视频片单。原名 KidsTube。
 
 **在线使用：** <https://lists.domibuddy.com> · 免费、开源（MIT）、无需注册
 

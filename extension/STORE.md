@@ -16,7 +16,7 @@
 ## 简短描述（≤132 字符）
 
 - 中文：让朵米片单读取 B 站、YouTube 等网站的视频标题、封面和合集。只在朵米片单网站上工作。
-- English: Lets DomiBuddy Lists read titles, thumbnails and collections from Bilibili, YouTube and more. Works only on DomiBuddy sites.
+- English: Lets Domi Lists read titles, thumbnails and collections from Bilibili, YouTube and more. Works only on DomiBuddy sites.
 
 ## 详细描述
 
@@ -37,7 +37,7 @@
 
 **English**
 
-DomiBuddy Lists (lists.domibuddy.com) is a kids' video list picked by parents: children only see videos a parent chose, with no recommendations or ads pulling them away.
+Domi Lists (lists.domibuddy.com) is a kids' video list picked by parents: children only see videos a parent chose, with no recommendations or ads pulling them away.
 
 Single YouTube and Bilibili videos and YouTube playlists work without the helper. With DomiBuddy Helper you can also:
 - import a whole Bilibili channel or collection

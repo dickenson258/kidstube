@@ -41,7 +41,7 @@
 • 使用你自己浏览器里的登录状态访问视频网站，扩展读取不到你的 Cookie。
 • 不收集、不上传任何数据，没有统计和广告。
 
-DomiBuddy Lists is a kids' video list picked by parents. With DomiBuddy Helper you can import a whole Bilibili channel or collection, import videos from a Baidu Netdisk folder, fill in titles and thumbnails from Tencent Video and Youku, and expand short links like b23.tv. It runs only on DomiBuddy sites and collects no data.
+Domi Lists is a kids' video list picked by parents. With DomiBuddy Helper you can import a whole Bilibili channel or collection, import videos from a Baidu Netdisk folder, fill in titles and thumbnails from Tencent Video and Youku, and expand short links like b23.tv. It runs only on DomiBuddy sites and collects no data.
 ```
 
 | 字段 | 填写 |
@@ -59,7 +59,7 @@ DomiBuddy Lists is a kids' video list picked by parents. With DomiBuddy Helper y
 **Single purpose description**：
 
 ```
-Helps the DomiBuddy Lists website (lists.domibuddy.com) read video titles, thumbnails and collection lists from video sites such as Bilibili and YouTube, using the parent's own browser sign-ins, so parents can build kids' video lists. It runs only on DomiBuddy's own sites.
+Helps the Domi Lists website (lists.domibuddy.com) read video titles, thumbnails and collection lists from video sites such as Bilibili and YouTube, using the parent's own browser sign-ins, so parents can build kids' video lists. It runs only on DomiBuddy's own sites.
 ```
 
 **Permission justification**（逐项粘贴）：

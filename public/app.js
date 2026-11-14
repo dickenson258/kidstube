@@ -274,7 +274,7 @@ function bindLangBtn() {
 }
 function topbar(extra = '') {
   return `<header class="topbar">
-    <a class="logo" href="#/" aria-label="${esc(t('appName'))}"><img src="icon.svg" alt=""><span>Domi<b>Buddy</b></span><span class="product">${t('product')}</span></a>
+    <a class="logo" href="#/" aria-label="${esc(t('appName'))}"><img src="icon.svg" alt=""><span>${t('appName')}</span></a>
     <div class="spacer"></div>${extra}${langBtn()}
     <button class="btn icon-btn" id="parent-btn" title="${t('parentArea')}" aria-label="${t('parentArea')}">${ICON.lock(20)}</button>
   </header>`;
@@ -913,7 +913,7 @@ function maybeShowNotice() {
 function renderParent(tab) {
   if (!TABS.includes(tab)) tab = 'add';
   setTimeout(maybeShowNotice, 500);
-  app.innerHTML = `<header class="topbar"><a class="logo" href="#/" aria-label="${esc(t('appName'))}"><img src="icon.svg" alt=""><span>Domi<b>Buddy</b></span><span class="product">${t('product')}</span></a><span class="badge">${t('parentArea')}</span>
+  app.innerHTML = `<header class="topbar"><a class="logo" href="#/" aria-label="${esc(t('appName'))}"><img src="icon.svg" alt=""><span>${t('appName')}</span></a><span class="badge">${t('parentArea')}</span>
       <div class="spacer"></div>${langBtn()}<button class="btn primary" id="exit">${t('exitKids')}</button></header>
     <main class="wrap admin">
       <nav class="nav">${TABS.map((k) => `<button data-t="${k}" class="${k === tab ? 'on' : ''}">${t(TAB_LABEL[k])}</button>`).join('')}</nav>
@@ -1403,7 +1403,7 @@ async function makePoster(link, title, count) {
   g.fillStyle = '#ff7a59'; g.font = font(700, 30);
   g.fillText(t('posterScan'), W / 2, qy + qrSize + 80);
   g.fillStyle = '#7a7383'; g.font = font(500, 24);
-  g.fillText('朵米片单 DomiBuddy Lists · lists.domibuddy.com', W / 2, H - 50);
+  g.fillText('朵米片单 Domi Lists · lists.domibuddy.com', W / 2, H - 50);
   return c.toDataURL('image/png');
 }
 async function showPoster(link, title, count) {
@@ -1772,7 +1772,7 @@ async function runSelfTest() {
   const out = $('#testout'), btn = $('#selftest');
   out.hidden = false;
   btn.disabled = true;
-  const lines = [`DomiBuddy Lists ${location.origin}`, `UA: ${navigator.userAgent}`];
+  const lines = [`Domi Lists ${location.origin}`, `UA: ${navigator.userAgent}`];
   const show = () => (out.textContent = lines.join('\n'));
   const step = async (label, fn) => {
     lines.push(`… ${label}`);
