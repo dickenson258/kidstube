@@ -396,6 +396,7 @@ function renderHome() {
           <a class="btn primary" href="https://lists.domibuddy.com/">${t('legacyVisit')}</a>
         </div>
       </aside>` : ''}
+      ${deviceKind() === 'ios' && !isStandalone() ? iosHomeScreenGuide() : ''}
       ${kidVideos().length ? `<div class="chips">${[ALL, ...groups].map((g) => `<button class="chip ${g === homeGroup ? 'on' : ''}" data-g="${esc(g)}">${esc(g === ALL ? t('all') : g)}</button>`).join('')}</div>` : ''}
       ${creators.length > 1 ? `<div class="chips sub">${[{ key: ALL, name: t('allCreators') }, ...creators].map((c) => `<button class="chip folder ${c.key === homeCreator ? 'on' : ''}" data-c="${esc(c.key)}">${ICON.folder(16)}<span>${esc(c.name)}</span>${c.count ? `<em>${c.count}</em>` : ''}</button>`).join('')}</div>` : ''}
       ${sortMode ? `<div class="chips sort">${SORTS.map((m) => `<button class="chip small ${m === sortMode ? 'on' : ''}" data-sort="${m}">${t('sort_' + m)}</button>`).join('')}</div>` : ''}
@@ -541,10 +542,23 @@ function usesBiliMobilePlayer() {
 function isStandalone() {
   return navigator.standalone || matchMedia('(display-mode: standalone)').matches;
 }
+function iosHomeScreenGuide() {
+  return `<details class="hint home-screen-guide">
+    <summary>${t('iosHomeScreen')}</summary>
+    <p>${t('iosHomeScreenSteps')}</p>
+    <div class="home-screen-example" aria-hidden="true">
+      <strong>${t('iosHomeScreen')}</strong>
+      <div class="home-screen-option"><span>${t('iosWebAppOption')}</span><span class="home-screen-switch"></span></div>
+    </div>
+  </details>`;
+}
 function biliSiteModeGuide() {
+  const kind = deviceKind();
+  if (kind === 'ios' && isStandalone()) {
+    return `<p>${t('biliSiteModeIosApp')}</p><button type="button" class="btn small" data-copy-bili-page>${t('copyLink')}</button>${iosHomeScreenGuide()}`;
+  }
   if (usesBiliMobilePlayer()) return '';
   const ua = navigator.userAgent;
-  const kind = deviceKind();
   // 安卓请求桌面网站时可能只报告 Linux。
   const android = !/Mobile/.test(ua) && (kind === 'android' || (/Linux/.test(ua) && navigator.maxTouchPoints > 1));
   if (kind !== 'ios' && !android) return '';
@@ -591,7 +605,7 @@ function mountIframe(box, v, onEnded) {
       referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation allow-storage-access-by-user-activation"' : ''}></iframe>
     ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}
     ${biliMobile ? '<div class="shield bili-mobile-danmaku" aria-hidden="true"></div>' : ''}`;
-  if (v.platform === 'bilibili' && !biliMobile) {
+  if (v.platform === 'bilibili') {
     const guide = biliSiteModeGuide();
     const bar = box.parentElement && $('.player-bar', box.parentElement);
     if (guide && bar && !bar.nextElementSibling?.matches('.bili-site-mode')) {
@@ -822,16 +836,9 @@ function renderWatch(id) {
   document.title = v.title + ' · ' + t('appName');
   const eps = v.series ? seriesEps(v.series.id) : [];
   const next = nextEpisode(v);
-  // 右侧列表：合集 → 按集数；非合集 → 这个博主的全部视频，顺序和首页为该博主选的排序一致（当前视频高亮）；再列其他视频
-  const ck = creatorKey(v);
-  const creatorList = v.series ? [] : sortVideos(kidVideos().filter((x) => creatorKey(x) === ck), creatorSort(ck));
-  const more = kidVideos()
-    .filter((x) => x.id !== v.id && !(v.series && x.series?.id === v.series.id) && !creatorList.some((c) => c.id === x.id))
-    .sort((a, b) => (creatorKey(a) === ck ? 0 : a.group === v.group ? 1 : 2) - (creatorKey(b) === ck ? 0 : b.group === v.group ? 1 : 2))
-    .slice(0, 12);
   app.innerHTML =
     topbar() +
-    `<main class="wrap watch">
+    `<main class="wrap watch ${eps.length > 1 ? 'watch-series' : ''}">
       <section>
         <div class="player" id="player"></div>
         <h1>${esc(v.title)}</h1>
@@ -839,11 +846,10 @@ function renderWatch(id) {
         <div class="player-bar"><a class="btn" href="#/">${t('back')}</a><button class="btn" id="fs">${t('fullscreen')}</button>
           ${next ? `<a class="btn primary" href="#/watch/${next.id}">${t('nextEp')} ▶</a>` : ''}</div>
       </section>
-      <aside class="side">
-        ${eps.length > 1 ? `<h3 class="side-title">${ICON.folder(16)} ${esc(v.series.title)}</h3>${eps.map((x, i) => videoCard(x, { ep: i + 1, current: x.id === v.id })).join('')}<h3 class="side-title">${t('moreVideos')}</h3>` : ''}
-        ${creatorList.length > 1 ? `<h3 class="side-title">${ICON.folder(16)} ${esc(v.author || '')} · ${t('sort_' + creatorSort(ck))}</h3>${creatorList.map((x) => videoCard(x, { current: x.id === v.id })).join('')}<h3 class="side-title">${t('moreVideos')}</h3>` : ''}
-        ${more.map((x) => videoCard(x)).join('')}
-      </aside>
+      ${eps.length > 1 ? `<aside class="side">
+        <h3 class="side-title">${ICON.folder(16)} ${esc(v.series.title)}</h3>
+        ${eps.map((x, i) => videoCard(x, { ep: i + 1, current: x.id === v.id })).join('')}
+      </aside>` : ''}
     </main>`;
   bindTopbar();
   const box = $('#player');

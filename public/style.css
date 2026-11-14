@@ -82,7 +82,8 @@ img { display: block; }
 .plat-youku { background: #1f8cff; } .plat-iqiyi { background: #00be06; } .plat-ixigua { background: #fe2c55; } .plat-other, .plat-direct, .plat-dailymotion, .plat-mgtv { background: #6b5bd2; }
 
 /* ---------- 播放页 ---------- */
-.watch { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; }
+.watch { max-width: 940px; }
+.watch-series { max-width: 1280px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; }
 .player { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .player.portrait { aspect-ratio: 9 / 16; max-height: 78vh; width: auto; margin: 0 auto; }
 .player iframe, .player video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
@@ -96,6 +97,13 @@ img { display: block; }
 .player-bar { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .bili-site-mode summary { cursor: pointer; text-decoration: underline; }
 .bili-site-mode p { margin: 6px 0 0; }
+.home-screen-guide { margin: 12px 0; text-align: left; }
+.home-screen-guide summary { cursor: pointer; text-decoration: underline; }
+.home-screen-guide p { margin: 8px 0; }
+.home-screen-example { max-width: 320px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); color: var(--text); }
+.home-screen-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface); }
+.home-screen-switch { flex: none; width: 42px; height: 24px; padding: 3px; border-radius: 99px; background: #777; }
+.home-screen-switch::after { content: ""; display: block; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
 
 /* ---------- 家长后台 ---------- */
 .admin { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
@@ -164,7 +172,7 @@ label.inline { display: inline-flex; gap: 8px; align-items: center; cursor: poin
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 900px) {
-  .watch, .admin { grid-template-columns: minmax(0, 1fr); }
+  .watch-series, .admin { grid-template-columns: minmax(0, 1fr); }
   .nav { position: static; flex-direction: row; overflow-x: auto; }
   .nav button { flex: none; }
   .side .card { grid-template-columns: 130px 1fr; }
