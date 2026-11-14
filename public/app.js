@@ -512,9 +512,11 @@ function embedUrl(v) {
     const hl = db.settings.lang === 'zh' ? 'zh-CN' : 'en';
     return `${host}/embed/${v.vid}?autoplay=1&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&fs=0&enablejsapi=1&hl=${hl}&origin=${encodeURIComponent(location.origin)}${v.resumeAt ? `&start=${v.resumeAt}` : ''}`;
   }
-  if (v.platform === 'bilibili' && v.playType === 'iframe')
+  if (v.platform === 'bilibili' && v.playType === 'iframe') {
+    const mobileControls = usesBiliMobilePlayer() ? '&danmakuClosed=true&danmakuBtn=2&noFullScreenButton=true' : '';
     // 让孩子在 B 站播放器内点击播放，避免浏览器把自动播放降级为静音。
-    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&p=${v.page || 1}&autoplay=0&muted=0&danmaku=0&danmakuClosed=true&high_quality=1${v.resumeAt ? `&t=${v.resumeAt}` : ''}`;
+    return `https://player.bilibili.com/player.html?${v.vid.startsWith('av') ? 'aid=' + v.vid.slice(2) : 'bvid=' + v.vid}&p=${v.page || 1}&autoplay=0&muted=0&danmaku=0${mobileControls}&high_quality=1${v.resumeAt ? `&t=${v.resumeAt}` : ''}`;
+  }
   return v.embed;
 }
 
@@ -547,9 +549,10 @@ function iosHomeScreenGuide() {
     <summary>${t('iosHomeScreen')}</summary>
     <p>${t('iosHomeScreenSteps')}</p>
     <div class="home-screen-example" aria-hidden="true">
-      <strong>${t('iosHomeScreen')}</strong>
-      <div class="home-screen-option"><span>${t('iosWebAppOption')}</span><span class="home-screen-switch"></span></div>
+      <strong>${t('iosWebsiteSettings')}</strong>
+      <div class="home-screen-option"><span>${t('iosDesktopSiteOption')}</span><span class="home-screen-switch"></span></div>
     </div>
+    <p>${t('iosHomeScreenAdd')}</p>
   </details>`;
 }
 function biliSiteModeGuide() {
@@ -595,7 +598,7 @@ async function maybeShowBiliSyncGuide() {
 }
 function mountIframe(box, v, onEnded) {
   const s = db.settings;
-  // B 站用这一条件把 iframe 转到手机版。手机版保留了弹幕开关，需单独拦截点击。
+  // B 站用这一条件把 iframe 转到手机版。由片单接管全屏，退出时仍能使用同一个按钮。
   const biliMobile = v.platform === 'bilibili' && usesBiliMobilePlayer();
   // 沙箱（不含 allow-popups / allow-top-navigation）：播放器里指向外网的链接、"在 YouTube 上观看"、推荐卡片等
   // 无法打开新页面或跳转片单所在页面；各平台可在家长设置中单独调整。
@@ -603,11 +606,11 @@ function mountIframe(box, v, onEnded) {
   // 有沙箱时外链本来就打不开，不再加透明遮挡（否则会挡住 YouTube 卡片列表的关闭按钮等正常操作）
   box.innerHTML = `<iframe src="${esc(embedUrl(v))}" allow="autoplay; ${biliMobile ? "fullscreen 'none'" : 'fullscreen'}; encrypted-media; picture-in-picture; storage-access"
       referrerpolicy="strict-origin-when-cross-origin" ${sandboxed ? 'sandbox="allow-scripts allow-same-origin allow-presentation allow-storage-access-by-user-activation"' : ''}></iframe>
-    ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}
-    ${biliMobile ? '<div class="shield bili-mobile-danmaku" aria-hidden="true"></div>' : ''}`;
+    ${s.shield && !sandboxed ? (SHIELDS[v.platform] || SHIELDS.default).map((c) => `<div class="shield ${c}"></div>`).join('') : ''}`;
   if (v.platform === 'bilibili') {
     const guide = biliSiteModeGuide();
-    const bar = box.parentElement && $('.player-bar', box.parentElement);
+    const section = box.closest('section');
+    const bar = section && $('.player-bar', section);
     if (guide && bar && !bar.nextElementSibling?.matches('.bili-site-mode')) {
       bar.insertAdjacentHTML('afterend', `<details class="hint bili-site-mode">
         <summary>${t(isStandalone() ? 'biliSiteModeAppTitle' : 'biliSiteMode')}</summary>
@@ -711,7 +714,7 @@ function mountVideo(box, v, src, onEnded, onFail, { forceHls = false, hlsConfig 
   const video = $('video', box);
   let played = false;
   video.addEventListener('loadedmetadata', () => {
-    box.classList.toggle('portrait', video.videoHeight > video.videoWidth);
+    box.parentElement.classList.toggle('portrait', video.videoHeight > video.videoWidth);
     if (v.resumeAt && v.resumeAt < video.duration - 8) video.currentTime = v.resumeAt;
   }, { once: false });
   video.addEventListener('playing', () => (played = true));
@@ -840,10 +843,13 @@ function renderWatch(id) {
     topbar() +
     `<main class="wrap watch ${eps.length > 1 ? 'watch-series' : ''}">
       <section>
-        <div class="player" id="player"></div>
+        <div class="player" id="player">
+          <div id="player-media"></div>
+          <button type="button" class="player-fullscreen" id="fs"></button>
+        </div>
         <h1>${esc(v.title)}</h1>
         <div class="meta">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · ${esc(v.series.title)} ${t('epOfN', epNo(v), eps.length)}` : ''}</div>
-        <div class="player-bar"><a class="btn" href="#/">${t('back')}</a><button class="btn" id="fs">${t('fullscreen')}</button>
+        <div class="player-bar"><a class="btn" href="#/">${t('back')}</a>
           ${next ? `<a class="btn primary" href="#/watch/${next.id}">${t('nextEp')} ▶</a>` : ''}</div>
       </section>
       ${eps.length > 1 ? `<aside class="side">
@@ -853,6 +859,7 @@ function renderWatch(id) {
     </main>`;
   bindTopbar();
   const box = $('#player');
+  const media = $('#player-media', box);
   let unmount, countdown;
   // 播放结束：有下一集且开启了自动播放 → 5 秒倒计时（可取消）
   const onEnded = () => {
@@ -875,7 +882,7 @@ function renderWatch(id) {
   // 播放记录：从上次的位置接着播（YouTube / B 站 / 直链视频能定位；其他网站的嵌入播放器只记录"看过"）
   const resumeAt = resumePoint(v.id);
   let moved = !resumeAt;
-  const startPlayer = (at) => { unmount?.(); Promise.resolve(mountPlayer(box, { ...v, resumeAt: at }, onEnded)).then((fn) => (unmount = fn)); };
+  const startPlayer = (at) => { unmount?.(); Promise.resolve(mountPlayer(media, { ...v, resumeAt: at }, onEnded)).then((fn) => (unmount = fn)); };
   startPlayer(resumeAt);
   if (!progressOf(v.id)) setProgress(v.id, 0, durSec(v.duration));
   else db.progress[v.id].at = Date.now();
@@ -902,34 +909,60 @@ function renderWatch(id) {
   // B 站播放器不会通知播放结束：按时长估算，快结束时只在底部提示"下一集"，不自动切换
   const estimate = v.platform === 'bilibili' && v.playType === 'iframe' && next ? durSec(v.duration) : 0;
   let watched = 0;
-  // iPhone Safari 不支持对普通元素全屏，改用铺满屏幕的"伪全屏"（并提示横屏）
-  const exitPseudo = () => { box.classList.remove('pseudo-fs'); document.body.classList.remove('no-scroll'); };
+  const fs = $('#fs', box);
+  const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const syncFsButton = () => {
+    const active = fullscreenElement() === box || box.classList.contains('pseudo-fs');
+    const label = t(active ? 'exitFullscreen' : 'fullscreen');
+    fs.setAttribute('aria-label', label);
+    fs.title = label;
+    fs.innerHTML = svg(active
+      ? '<path d="M4 9h5V4m11 5h-5V4M4 15h5v5m11-5h-5v5"/>'
+      : '<path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>', 22);
+  };
+  const exitPseudo = () => {
+    box.classList.remove('pseudo-fs');
+    document.body.classList.remove('no-scroll');
+    syncFsButton();
+  };
+  const exitNative = async () => {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    try { await exit?.call(document); } catch {}
+    if (!fullscreenElement()) {
+      try { screen.orientation?.unlock?.(); } catch {}
+    }
+  };
   // 全屏后锁定横屏（Android 上的 Firefox / Chrome 支持；手机开着"锁定竖屏"时也能横过来）。竖屏视频不锁。
   // Firefox 手机版在视频暂停时会自己把方向还原成竖屏，所以全屏期间一旦被转回竖屏、或播放器暂停/继续，就重新锁定
-  const wantLandscape = () => document.fullscreenElement === box && !box.classList.contains('portrait');
+  const wantLandscape = () => fullscreenElement() === box && !box.classList.contains('portrait');
   const relock = () => { if (wantLandscape()) screen.orientation?.lock?.('landscape').catch(() => {}); };
   const relockSoon = () => { relock(); setTimeout(relock, 300); setTimeout(relock, 1000); };
   const onFsChange = () => {
+    syncFsButton();
     const o = screen.orientation;
     if (!o) return;
     if (wantLandscape()) relock();
-    else if (!document.fullscreenElement) { try { o.unlock?.(); } catch {} }
+    else if (!fullscreenElement()) { try { o.unlock?.(); } catch {} }
   };
   const onOrient = () => { if (wantLandscape() && screen.orientation.type.startsWith('portrait')) relock(); };
   document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
   screen.orientation?.addEventListener?.('change', onOrient);
   // 播放状态变化：自己的 <video>（pause / play 不冒泡，用捕获）和 YouTube 播放器（watchYouTube 发出 kt-state）
   ['pause', 'play', 'kt-state'].forEach((ev) => box.addEventListener(ev, relockSoon, true));
-  $('#fs').onclick = () => {
+  syncFsButton();
+  fs.onclick = async () => {
+    if (box.classList.contains('pseudo-fs')) return exitPseudo();
+    if (fullscreenElement() === box) return exitNative();
     const req = box.requestFullscreen || box.webkitRequestFullscreen;
-    if (req) return Promise.resolve(req.call(box)).catch(() => {});
+    if (req) {
+      try { await req.call(box); return; } catch {}
+    }
+    // iPhone 等不支持元素全屏时，让播放器铺满当前网页视口。
+    if (!box.isConnected) return;
     box.classList.add('pseudo-fs');
     document.body.classList.add('no-scroll');
-    if (!$('.fs-exit', box)) {
-      const b = Object.assign(document.createElement('button'), { className: 'fs-exit', textContent: '✕', ariaLabel: 'exit fullscreen' });
-      b.onclick = exitPseudo;
-      box.appendChild(b);
-    }
+    syncFsButton();
   };
 
   // 观看计时（页面可见时累计）
@@ -946,13 +979,22 @@ function renderWatch(id) {
     if (usage().sec % 10 === 0) save();
     if (usage().sec >= limitSec()) {
       save();
-      clearInterval(timer);
-      if (document.fullscreenElement) document.exitFullscreen();
-      unmount?.();
+      cleanup?.();
+      cleanup = null;
       renderRest();
     }
   }, 1000);
-  cleanup = () => { clearInterval(timer); clearInterval(countdown); unmount?.(); exitPseudo(); document.removeEventListener('fullscreenchange', onFsChange); screen.orientation?.removeEventListener?.('change', onOrient); save(); };
+  cleanup = () => {
+    clearInterval(timer);
+    clearInterval(countdown);
+    unmount?.();
+    if (fullscreenElement() === box) void exitNative();
+    exitPseudo();
+    document.removeEventListener('fullscreenchange', onFsChange);
+    document.removeEventListener('webkitfullscreenchange', onFsChange);
+    screen.orientation?.removeEventListener?.('change', onOrient);
+    save();
+  };
 }
 
 // ------------------------------------------------------------ 家长后台

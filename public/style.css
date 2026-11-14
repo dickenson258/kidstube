@@ -191,14 +191,13 @@ label.inline { display: inline-flex; gap: 8px; align-items: center; cursor: poin
 .shield { position: absolute; z-index: 2; background: transparent; cursor: default; }
 .shield.top { left: 0; right: 0; top: 0; height: max(56px, 14%); }
 .shield.yt-logo { right: 0; bottom: 0; width: 120px; height: 52px; }
-/* B 站手机版弹幕按钮的命中区。片单的全屏按钮会连同遮罩一起放大。 */
-.shield.bili-mobile-danmaku { right: 54px; bottom: 10px; width: 24px; height: 24px; }
 .yt-cover { position: absolute; inset: 0 0 52px 0; z-index: 3; display: grid; place-items: center; background: rgba(0,0,0,.55); }
 .yt-cover[hidden] { display: none; }
 .yt-cover .ended { display: grid; gap: 12px; justify-items: center; color: #fff; font-size: 22px; font-weight: 800; }
 .yt-cover .ended .big { font-size: 56px; }
 .play-big { width: 96px; height: 96px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; font-size: 40px; cursor: pointer; box-shadow: 0 8px 30px rgba(0,0,0,.35); padding-left: 8px; }
-.player:fullscreen { border-radius: 0; aspect-ratio: auto; }
+.player:fullscreen { border-radius: 0; aspect-ratio: auto; max-height: none; }
+.player:-webkit-full-screen { border-radius: 0; aspect-ratio: auto; max-height: none; }
 
 .single { display: flex; gap: 16px; margin-top: 20px; align-items: flex-start; flex-wrap: wrap; }
 .single > .thumb { width: 260px; max-width: 100%; border-radius: 14px; overflow: hidden; flex: none; }
@@ -209,8 +208,13 @@ label.inline { display: inline-flex; gap: 8px; align-items: center; cursor: poin
 
 /* ---------- 手机 ---------- */
 .pseudo-fs { position: fixed !important; inset: 0; z-index: 100; width: 100vw !important; height: 100dvh !important; max-height: none !important; aspect-ratio: auto !important; border-radius: 0 !important; }
-.fs-exit { position: absolute; z-index: 5; top: max(10px, env(safe-area-inset-top)); right: 10px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 18px; }
-.player:not(.pseudo-fs) .fs-exit { display: none; }
+.player-fullscreen {
+  position: absolute; z-index: 7; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right));
+  display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px;
+  background: rgba(0,0,0,.72); color: #fff; cursor: pointer;
+}
+.player-fullscreen:hover { background: rgba(0,0,0,.9); }
+.player-fullscreen:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 body.no-scroll { overflow: hidden; }
 .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
 @media (max-width: 560px) {
