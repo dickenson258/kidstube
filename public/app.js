@@ -847,10 +847,12 @@ function renderWatch(id) {
           <div id="player-media"></div>
           <button type="button" class="player-fullscreen" id="fs"></button>
         </div>
+        <div class="player-bar">
+          <a class="btn" href="#/">${t('back')}</a>
+          ${next ? `<a class="btn primary" href="#/watch/${next.id}">${t('nextEp')} ${svg('<path d="M5 12h14m-6-6 6 6-6 6"/>', 18)}</a>` : ''}
+        </div>
         <h1>${esc(v.title)}</h1>
         <div class="meta">${esc(v.author || '')} · ${esc(platName(v.platform))}${v.series ? ` · ${esc(v.series.title)} ${t('epOfN', epNo(v), eps.length)}` : ''}</div>
-        <div class="player-bar"><a class="btn" href="#/">${t('back')}</a>
-          ${next ? `<a class="btn primary" href="#/watch/${next.id}">${t('nextEp')} ▶</a>` : ''}</div>
       </section>
       ${eps.length > 1 ? `<aside class="side">
         <h3 class="side-title">${ICON.folder(16)} ${esc(v.series.title)}</h3>

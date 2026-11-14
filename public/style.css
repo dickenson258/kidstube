@@ -94,7 +94,9 @@ img { display: block; }
 .side .card { display: grid; grid-template-columns: 150px 1fr; }
 .side .card .title { font-size: 14px; }
 .side .card .body { padding: 8px 10px; }
-.player-bar { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.player-bar { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.player-bar .btn { min-height: 48px; }
+.player-bar .primary { margin-inline-start: auto; }
 .bili-site-mode summary { cursor: pointer; text-decoration: underline; }
 .bili-site-mode p { margin: 6px 0 0; }
 .home-screen-guide { margin: 12px 0; text-align: left; }
